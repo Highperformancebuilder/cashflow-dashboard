@@ -778,38 +778,24 @@ async function fetchSheetData(sheetId) {
   showSyncBadge('Syncing live data...', '#f59e0b');
 
   // Use published CSV URL from Supabase clients table
-  // Build correct URL based on what's stored in sheet_id
-  let PUBLISHED_CSV;
+  // Build the Google Sheets CSV URL
+  let googleUrl;
   if (sheetId.startsWith('https://')) {
-    // Already a published URL
-    PUBLISHED_CSV = sheetId.includes('?') 
+    googleUrl = sheetId.includes('?')
       ? sheetId + '&output=csv&sheet=Business%20Working%20Account'
       : sheetId + '?output=csv&sheet=Business%20Working%20Account';
   } else {
-    // It's a sheet ID - use the known published URL format
-    // For now use Greg's published URL, clients will have their own stored
-    PUBLISHED_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTEgXoNhYXilNYCqd8SIvcwXpN_G4ozpr2VfPoouiUCdQQBILx91w3Ckp2_gkfxz6F21wmSUSDbwEcG/pub?output=csv&sheet=Business%20Working%20Account';
+    googleUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTEgXoNhYXilNYCqd8SIvcwXpN_G4ozpr2VfPoouiUCdQQBILx91w3Ckp2_gkfxz6F21wmSUSDbwEcG/pub?output=csv&sheet=Business%20Working%20Account';
   }
+
+  // Route through Netlify function to avoid CORS
+  const PUBLISHED_CSV = '/.netlify/functions/sheet?url=' + encodeURIComponent(googleUrl);
 
   try {
     const response = await fetch(PUBLISHED_CSV);
-    const text = await response.text();
+    const rows = await response.json();
 
-    // Parse CSV
-    const lines = text.split('\n').map(line => {
-      const result = [];
-      let current = '';
-      let inQuotes = false;
-      for (let i = 0; i < line.length; i++) {
-        if (line[i] === '"') { inQuotes = !inQuotes; }
-        else if (line[i] === ',' && !inQuotes) { result.push(current.trim()); current = ''; }
-        else { current += line[i]; }
-      }
-      result.push(current.trim());
-      return result;
-    });
-
-    if (lines.length < 10) {
+    if (!rows || rows.length < 10) {
       showSyncBadge('Using cached data', '#f59e0b');
       renderOverview(); renderWeekly();
       return;
@@ -817,11 +803,11 @@ async function fetchSheetData(sheetId) {
 
     // Row 6 = index 5 (dates), Row 8 = index 7 (opening)
     // Row 65 = index 64 (sales), Row 76 = index 75 (total in), Row 98 = index 97 (total out)
-    const dateRow = lines[5] || [];
-    const openRow = lines[7] || [];
-    const salesRow = lines[64] || [];
-    const inRow = lines[75] || [];
-    const outRow = lines[97] || [];
+    const dateRow = rows[5] || [];
+    const openRow = rows[7] || [];
+    const salesRow = rows[64] || [];
+    const inRow = rows[75] || [];
+    const outRow = rows[97] || [];
 
     if (!dateRow.length) {
       showSyncBadge('Sheet format mismatch', '#ef4444');
@@ -829,10 +815,11 @@ async function fetchSheetData(sheetId) {
       return;
     }
 
-    // Find first date column (look for date pattern dd-Mon-yy)
+    // Find first date column - look for Date objects or date strings
     let startCol = 3;
     for (let i = 3; i < dateRow.length; i++) {
-      if (dateRow[i] && /\d{1,2}-[A-Za-z]{3}-\d{2,4}/.test(dateRow[i])) {
+      const v = dateRow[i];
+      if (v && (v instanceof Date || (typeof v === 'string' && v.includes('-')) || typeof v === 'number')) {
         startCol = i; break;
       }
     }
@@ -840,32 +827,45 @@ async function fetchSheetData(sheetId) {
     const newWeekly = [];
     const today = new Date();
     let cwIdx = 0;
-    const MONTHS = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
 
     const parseNum = (val) => {
-      if (!val || val === '') return 0;
-      const cleaned = val.replace(/[$,]/g, '').trim();
+      if (val === null || val === undefined || val === '') return 0;
+      if (typeof val === 'number') return val;
+      const cleaned = String(val).replace(/[$,]/g, '').trim();
       return parseFloat(cleaned) || 0;
     };
 
+    const parseDate = (val) => {
+      if (!val) return null;
+      if (val instanceof Date) return val;
+      if (typeof val === 'string') {
+        // Handle "Date(2026,5,18)" format from Apps Script
+        const m = String(val).match(/Date\((\d+),(\d+),(\d+)\)/);
+        if (m) return new Date(parseInt(m[1]), parseInt(m[2]), parseInt(m[3]));
+        // Handle ISO string
+        const d = new Date(val);
+        if (!isNaN(d)) return d;
+      }
+      if (typeof val === 'number') {
+        // Excel serial date
+        const d = new Date((val - 25569) * 86400 * 1000);
+        if (!isNaN(d)) return d;
+      }
+      return null;
+    };
+
     for (let col = startCol; col < dateRow.length; col++) {
-      const dateStr = dateRow[col];
-      if (!dateStr || !/\d/.test(dateStr)) continue;
+      const dateVal = dateRow[col];
+      if (!dateVal) continue;
+
+      const dateObj = parseDate(dateVal);
+      if (!dateObj || isNaN(dateObj.getTime())) continue;
 
       const opening = parseNum(openRow[col]);
       const sales = parseNum(salesRow[col]);
       const totalIn = parseNum(inRow[col]);
       const totalOut = parseNum(outRow[col]);
       const closing = opening + totalIn - totalOut;
-
-      // Parse date dd-Mon-yy or dd-Mon-yyyy
-      let dateObj = null;
-      const parts = dateStr.split('-');
-      if (parts.length === 3) {
-        const yr = parseInt(parts[2]) < 100 ? 2000 + parseInt(parts[2]) : parseInt(parts[2]);
-        dateObj = new Date(yr, MONTHS[parts[1]] ?? 0, parseInt(parts[0]));
-      }
-      if (!dateObj || isNaN(dateObj.getTime())) continue;
 
       const idx = newWeekly.length;
       if (dateObj <= today) cwIdx = idx;
