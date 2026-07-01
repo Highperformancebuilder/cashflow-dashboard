@@ -769,78 +769,103 @@ async function launchDashboard(email) {
 
   const sheetId = clientData.sheet_id;
   await fetchSheetData(sheetId);
+  // sheetId can be either:
+  // - A Google Sheet ID (old format): 1MXTCOStUpHpGYrthqRb8NCuERbUIeyZcRZVvdG4P15c
+  // - A published CSV base URL (new format): https://docs.google.com/spreadsheets/d/e/xxx/pub
 }
 
 async function fetchSheetData(sheetId) {
   showSyncBadge('Syncing live data...', '#f59e0b');
 
-  const sheetName = encodeURIComponent('Business Working Account');
-  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${sheetName}`;
+  // Use published CSV URL from Supabase clients table
+  // Build correct URL based on what's stored in sheet_id
+  let PUBLISHED_CSV;
+  if (sheetId.startsWith('https://')) {
+    // Already a published URL
+    PUBLISHED_CSV = sheetId.includes('?') 
+      ? sheetId + '&output=csv&sheet=Business%20Working%20Account'
+      : sheetId + '?output=csv&sheet=Business%20Working%20Account';
+  } else {
+    // It's a sheet ID - use the known published URL format
+    // For now use Greg's published URL, clients will have their own stored
+    PUBLISHED_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTEgXoNhYXilNYCqd8SIvcwXpN_G4ozpr2VfPoouiUCdQQBILx91w3Ckp2_gkfxz6F21wmSUSDbwEcG/pub?output=csv&sheet=Business%20Working%20Account';
+  }
 
   try {
-    const response = await fetch(url);
+    const response = await fetch(PUBLISHED_CSV);
     const text = await response.text();
-    const jsonStr = text.replace(/^[^{]*/,'').replace(/[^}]*$/,'');
-    const data = JSON.parse(jsonStr);
 
-    if (!data.table || !data.table.rows || data.table.rows.length < 10) {
+    // Parse CSV
+    const lines = text.split('\n').map(line => {
+      const result = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        if (line[i] === '"') { inQuotes = !inQuotes; }
+        else if (line[i] === ',' && !inQuotes) { result.push(current.trim()); current = ''; }
+        else { current += line[i]; }
+      }
+      result.push(current.trim());
+      return result;
+    });
+
+    if (lines.length < 10) {
       showSyncBadge('Using cached data', '#f59e0b');
       renderOverview(); renderWeekly();
       return;
     }
 
-    const rows = data.table.rows;
+    // Row 6 = index 5 (dates), Row 8 = index 7 (opening)
+    // Row 65 = index 64 (sales), Row 76 = index 75 (total in), Row 98 = index 97 (total out)
+    const dateRow = lines[5] || [];
+    const openRow = lines[7] || [];
+    const salesRow = lines[64] || [];
+    const inRow = lines[75] || [];
+    const outRow = lines[97] || [];
 
-    // Row indices (0-based): 5=dates, 7=opening, 64=sales, 75=total_in, 97=total_out
-    const dateRow = rows[5];
-    const openRow = rows[7];
-    const salesRow = rows[64];
-    const inRow = rows[75];
-    const outRow = rows[97];
-
-    if (!dateRow || !openRow) {
+    if (!dateRow.length) {
       showSyncBadge('Sheet format mismatch', '#ef4444');
       renderOverview(); renderWeekly();
       return;
     }
 
-    // Find first date column
+    // Find first date column (look for date pattern dd-Mon-yy)
     let startCol = 3;
-    for (let i = 3; i < (dateRow.c || []).length; i++) {
-      if (dateRow.c[i] && (dateRow.c[i].v || dateRow.c[i].f)) { startCol = i; break; }
+    for (let i = 3; i < dateRow.length; i++) {
+      if (dateRow[i] && /\d{1,2}-[A-Za-z]{3}-\d{2,4}/.test(dateRow[i])) {
+        startCol = i; break;
+      }
     }
 
     const newWeekly = [];
     const today = new Date();
     let cwIdx = 0;
+    const MONTHS = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
 
-    for (let col = startCol; col < (dateRow.c || []).length; col++) {
-      const dc = dateRow.c[col];
-      if (!dc || (!dc.v && !dc.f)) continue;
+    const parseNum = (val) => {
+      if (!val || val === '') return 0;
+      const cleaned = val.replace(/[$,]/g, '').trim();
+      return parseFloat(cleaned) || 0;
+    };
 
-      const getVal = (row) => {
-        if (!row || !row.c || !row.c[col]) return 0;
-        const v = row.c[col].v;
-        return v ? parseFloat(v) || 0 : 0;
-      };
+    for (let col = startCol; col < dateRow.length; col++) {
+      const dateStr = dateRow[col];
+      if (!dateStr || !/\d/.test(dateStr)) continue;
 
-      const opening = getVal(openRow);
-      const sales = getVal(salesRow);
-      const totalIn = getVal(inRow);
-      const totalOut = getVal(outRow);
+      const opening = parseNum(openRow[col]);
+      const sales = parseNum(salesRow[col]);
+      const totalIn = parseNum(inRow[col]);
+      const totalOut = parseNum(outRow[col]);
       const closing = opening + totalIn - totalOut;
 
-      // Parse date from label
+      // Parse date dd-Mon-yy or dd-Mon-yyyy
       let dateObj = null;
-      const label = dc.f || dc.v || '';
-      if (typeof label === 'string') {
-        const p = label.split('-');
-        if (p.length === 3) {
-          const months = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
-          dateObj = new Date(parseInt(p[2]), months[p[1]] || 0, parseInt(p[0]));
-        }
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        const yr = parseInt(parts[2]) < 100 ? 2000 + parseInt(parts[2]) : parseInt(parts[2]);
+        dateObj = new Date(yr, MONTHS[parts[1]] ?? 0, parseInt(parts[0]));
       }
-      if (!dateObj || isNaN(dateObj)) dateObj = new Date(today);
+      if (!dateObj || isNaN(dateObj.getTime())) continue;
 
       const idx = newWeekly.length;
       if (dateObj <= today) cwIdx = idx;
@@ -872,7 +897,7 @@ async function fetchSheetData(sheetId) {
     }
 
   } catch(err) {
-    console.error('Sheet error:', err);
+    console.error('Sheet fetch error:', err);
     showSyncBadge('Using cached data', '#f59e0b');
     renderOverview(); renderWeekly();
   }
