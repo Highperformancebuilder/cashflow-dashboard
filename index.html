@@ -6,6 +6,95 @@
 <title>Cashflow — Greg Jones</title>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+#login-screen {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  font-family: 'Manrope', sans-serif;
+}
+#login-box {
+  background: #191919;
+  border: 1px solid #315150;
+  border-radius: 12px;
+  padding: 48px 40px;
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+}
+#login-box .login-label {
+  font-size: 9px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: #315150;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+#login-box h2 {
+  font-size: 20px;
+  font-weight: 800;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 32px;
+}
+#login-box input {
+  width: 100%;
+  background: #000;
+  border: 1px solid #315150;
+  border-radius: 6px;
+  padding: 12px 16px;
+  color: #d0dbd6;
+  font-family: 'Manrope', sans-serif;
+  font-size: 14px;
+  margin-bottom: 12px;
+  outline: none;
+}
+#login-box input:focus {
+  border-color: #ccf492;
+}
+#login-btn {
+  width: 100%;
+  background: #ccf492;
+  border: none;
+  border-radius: 6px;
+  padding: 13px;
+  color: #000;
+  font-family: 'Manrope', sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  cursor: pointer;
+  margin-top: 8px;
+}
+#login-btn:hover { background: #b8e07a; }
+#login-error {
+  color: #ef4444;
+  font-size: 12px;
+  margin-top: 12px;
+  display: none;
+}
+#logout-btn {
+  background: none;
+  border: 1px solid #315150;
+  color: #d0dbd6;
+  border-radius: 5px;
+  padding: 6px 14px;
+  font-size: 9px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+  font-family: 'Manrope', sans-serif;
+}
+#logout-btn:hover { border-color: #ccf492; color: #ccf492; }
+#dashboard-wrap { display: none; }
+</style>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#000;color:#d0dbd6;font-family:'Manrope',sans-serif;min-height:100vh}
@@ -71,6 +160,22 @@ tr:hover td{background:rgba(49,81,80,.08)}
 </style>
 </head>
 <body>
+
+<!-- LOGIN SCREEN -->
+<div id="login-screen">
+  <div id="login-box">
+    <div class="login-label">High Performance Builder</div>
+    <h2>Client Portal</h2>
+    <input type="email" id="login-email" placeholder="Email address" />
+    <input type="password" id="login-password" placeholder="Password" />
+    <button id="login-btn" onclick="handleLogin()">Sign In</button>
+    <div id="login-error">Invalid email or password. Please try again.</div>
+  </div>
+</div>
+
+<!-- DASHBOARD WRAP -->
+<div id="dashboard-wrap">
+
 <div class="hdr">
   <div style="display:flex;align-items:center;gap:12px">
     <svg width="26" height="27" viewBox="0 0 206.33 212.6"><path fill="#ccf492" d="M8.84,98.81v27.09l80.78-39.1v33.07c0,10.65-6.09,20.37-15.68,25.01l-38.01,18.4v-26.43l-27.09,12.78v53.86l94.33-45.66,94.33,45.66v-53.88l-27.09-12.78v26.45l-38.01-18.4c-9.59-4.64-15.68-14.35-15.68-25.01v-33.07l80.78,39.1v-27.09l-94.33-45.66L8.84,98.81Z"/><polygon fill="#ccf492" points="103.17 9.11 8.84 54.77 8.84 81.86 103.17 36.2 197.49 81.86 197.49 54.77 103.17 9.11"/></svg>
@@ -688,5 +793,48 @@ renderWeekly();
 renderClients();
 renderMonthly();
 </script>
+</div><!-- end dashboard-wrap -->
+
+<script>
+const SUPABASE_URL = 'https://abhmonhsiluraykelrpp.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_D5P8QA2r-4FWmm3TfPpZgA_y1NSlV1W';
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+async function handleLogin() {
+  const email = document.getElementById('login-email').value;
+  const password = document.getElementById('login-password').value;
+  const errEl = document.getElementById('login-error');
+  errEl.style.display = 'none';
+
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+
+  if (error) {
+    errEl.style.display = 'block';
+    return;
+  }
+
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('dashboard-wrap').style.display = 'block';
+}
+
+async function handleLogout() {
+  await sb.auth.signOut();
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('dashboard-wrap').style.display = 'none';
+  document.getElementById('login-email').value = '';
+  document.getElementById('login-password').value = '';
+}
+
+// Check if already logged in
+(async () => {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('dashboard-wrap').style.display = 'block';
+  }
+})();
+</script>
+
 </body>
 </html>
