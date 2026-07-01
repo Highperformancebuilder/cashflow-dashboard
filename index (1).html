@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cashflow — Greg Jones</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+#login-screen{position:fixed;inset:0;background:#000;display:flex;align-items:center;justify-content:center;z-index:9999;font-family:'Manrope',sans-serif;}
+#login-box{background:#191919;border:1px solid #315150;border-radius:12px;padding:48px 40px;width:100%;max-width:400px;text-align:center;}
+.login-label{font-size:9px;letter-spacing:4px;text-transform:uppercase;color:#315150;font-weight:600;margin-bottom:8px;}
+.login-title{font-size:20px;font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:2px;margin-bottom:32px;}
+#login-email,#login-password{width:100%;background:#000;border:1px solid #315150;border-radius:6px;padding:12px 16px;color:#d0dbd6;font-family:'Manrope',sans-serif;font-size:14px;margin-bottom:12px;outline:none;box-sizing:border-box;}
+#login-email:focus,#login-password:focus{border-color:#ccf492;}
+#login-btn{width:100%;background:#ccf492;border:none;border-radius:6px;padding:13px;color:#000;font-family:'Manrope',sans-serif;font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;cursor:pointer;margin-top:8px;}
+#login-btn:hover{background:#b8e07a;}
+#login-error{color:#ef4444;font-size:12px;margin-top:12px;display:none;}
+#logout-btn{background:none;border:1px solid #315150;color:#d0dbd6;border-radius:5px;padding:6px 14px;font-size:9px;letter-spacing:1px;text-transform:uppercase;cursor:pointer;font-family:'Manrope',sans-serif;}
+#logout-btn:hover{border-color:#ccf492;color:#ccf492;}
+#dashboard-wrap{display:none;}
+#sync-badge{font-size:8px;letter-spacing:1px;color:#315150;text-transform:uppercase;padding:4px 8px;}
+</style>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#000;color:#d0dbd6;font-family:'Manrope',sans-serif;min-height:100vh}
+::-webkit-scrollbar{width:4px;background:#191919}
+::-webkit-scrollbar-thumb{background:#315150;border-radius:2px}
+.hdr{background:#191919;border-bottom:1px solid #315150;padding:0 18px;display:flex;align-items:center;justify-content:space-between;min-height:58px;position:sticky;top:0;z-index:50}
+.htop{font-size:9px;letter-spacing:4px;color:#315150;text-transform:uppercase;font-weight:600;margin-bottom:2px}
+.htitle{font-size:15px;font-weight:800;color:#fff;letter-spacing:1px;text-transform:uppercase}
+.badge{border-radius:5px;padding:4px 10px;font-size:9px;letter-spacing:1px;text-transform:uppercase}
+.nav{background:#191919;border-bottom:1px solid rgba(49,81,80,.5);padding:0 18px;display:flex;overflow-x:auto;position:sticky;top:58px;z-index:49}
+.nav::-webkit-scrollbar{display:none}
+.nb{background:none;border:none;border-bottom:2px solid transparent;color:#d0dbd6;padding:11px 14px;font-size:9px;letter-spacing:2px;text-transform:uppercase;cursor:pointer;font-family:inherit;white-space:nowrap;opacity:.55}
+.nb.active{color:#ccf492;border-bottom:2px solid #ccf492;font-weight:700;opacity:1}
+.content{padding:16px}
+.tab{display:none}
+.tab.active{display:block}
+.card{background:#191919;border:1px solid rgba(49,81,80,.5);border-radius:8px;padding:14px 16px;margin-bottom:12px}
+.clime{border-color:rgba(204,244,146,.25)!important}
+.cred{border-color:rgba(239,68,68,.4)!important}
+.camber{border-color:rgba(245,158,11,.3)!important}
+.lbl{font-size:9px;color:#d0dbd6;letter-spacing:3px;text-transform:uppercase;font-weight:700;margin-bottom:8px;opacity:.6;display:block}
+.g2{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+.stat{background:#191919;border:1px solid rgba(49,81,80,.4);border-radius:8px;padding:12px}
+.bn{font-size:24px;font-weight:800;line-height:1;margin-bottom:4px}
+.mn{font-size:18px;font-weight:800;line-height:1;margin-bottom:4px}
+.sl{font-size:9px;color:#fff;margin-bottom:2px}
+.ss{font-size:8px;color:#d0dbd6;opacity:.5}
+.alert{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:#fca5a5;line-height:1.6}
+.warn{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:#fbbf24;line-height:1.6}
+.good{background:rgba(204,244,146,.06);border:1px solid rgba(204,244,146,.2);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:#ccf492;line-height:1.6}
+.wr{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#191919;border:1px solid rgba(49,81,80,.3);border-radius:6px;margin-bottom:6px;cursor:pointer}
+.wr.cwk{border-color:rgba(204,244,146,.4);background:rgba(204,244,146,.03)}
+.wr.twk{border-color:rgba(239,68,68,.4)}
+.wr.wwk{border-color:rgba(245,158,11,.3)}
+.wx{padding:12px;background:#000;border:1px solid rgba(49,81,80,.3);border-top:none;border-radius:0 0 6px 6px;margin-bottom:6px;margin-top:-6px}
+.ei{display:flex;justify-content:space-between;font-size:10px;padding:5px 0;border-bottom:1px solid rgba(49,81,80,.2)}
+.pb{background:#233a39;border-radius:99px;height:6px;overflow:hidden;margin:4px 0 8px}
+.pf{height:100%;border-radius:99px}
+.cw{position:relative;height:200px;margin-bottom:14px}
+table{width:100%;border-collapse:collapse;font-size:10px}
+th{background:#191919;color:#d0dbd6;padding:8px 10px;text-align:left;font-size:9px;letter-spacing:1px;text-transform:uppercase;opacity:.6;border-bottom:1px solid rgba(49,81,80,.4)}
+td{padding:8px 10px;border-bottom:1px solid rgba(49,81,80,.2);color:#d0dbd6}
+td.pos{color:#ccf492;font-weight:700}
+td.neg{color:#ef4444;font-weight:700}
+td.neu{color:#f59e0b;font-weight:700}
+tr:hover td{background:rgba(49,81,80,.08)}
+.footer{border-top:1px solid rgba(49,81,80,.3);padding:10px 18px;display:flex;align-items:center;justify-content:space-between;margin-top:10px}
+.ftxt{font-size:8px;color:#315150;letter-spacing:3px;text-transform:uppercase}
+
+@keyframes pulse-red {
+  0% { box-shadow: 0 0 0 0 rgba(239,68,68,.6); }
+  50% { box-shadow: 0 0 16px 6px rgba(239,68,68,.3); }
+  100% { box-shadow: 0 0 0 0 rgba(239,68,68,.6); }
+}
+@keyframes pulse-amber {
+  0% { box-shadow: 0 0 0 0 rgba(245,158,11,.6); }
+  50% { box-shadow: 0 0 16px 6px rgba(245,158,11,.3); }
+  100% { box-shadow: 0 0 0 0 rgba(245,158,11,.6); }
+}
+.pipeline-pulse { animation: pulse-red 1.5s ease-in-out infinite; border-color: rgba(239,68,68,.6) !important; }
+.pipeline-pulse-amber { animation: pulse-amber 1.5s ease-in-out infinite; border-color: rgba(245,158,11,.5) !important; }
+</style>
+</head>
+<body>
+
+<div id="login-screen">
+  <div id="login-box">
+    <div class="login-label">High Performance Builder</div>
+    <div class="login-title">Client Portal</div>
+    <input type="email" id="login-email" placeholder="Email address" />
+    <input type="password" id="login-password" placeholder="Password" onkeydown="if(event.key==='Enter')handleLogin()" />
+    <button id="login-btn" onclick="handleLogin()">Sign In</button>
+    <div id="login-error">Invalid email or password. Please try again.</div>
+  </div>
+</div>
+<div id="dashboard-wrap">
+<div class="hdr">
+  <div style="display:flex;align-items:center;gap:12px">
+    <svg width="26" height="27" viewBox="0 0 206.33 212.6"><path fill="#ccf492" d="M8.84,98.81v27.09l80.78-39.1v33.07c0,10.65-6.09,20.37-15.68,25.01l-38.01,18.4v-26.43l-27.09,12.78v53.86l94.33-45.66,94.33,45.66v-53.88l-27.09-12.78v26.45l-38.01-18.4c-9.59-4.64-15.68-14.35-15.68-25.01v-33.07l80.78,39.1v-27.09l-94.33-45.66L8.84,98.81Z"/><polygon fill="#ccf492" points="103.17 9.11 8.84 54.77 8.84 81.86 103.17 36.2 197.49 81.86 197.49 54.77 103.17 9.11"/></svg>
+    <div><div class="htop">Greg Jones</div><div class="htitle">Cashflow FY2026</div></div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center"><button id="logout-btn" onclick="handleLogout()">Sign Out</button>
+    <div class="badge" id="risk-badge" style="display:none;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:#ef4444">⚠ Cash Risk</div>
+    <span id="sync-badge"></span><div class="badge" style="background:rgba(204,244,146,.08);border:1px solid rgba(204,244,146,.3);color:#ccf492">FY2026</div>
+  </div>
+</div>
+<div class="nav">
+  <button class="nb active" onclick="showTab('overview',this)">Overview</button>
+  <button class="nb" onclick="showTab('weekly',this)">Weekly</button>
+  <button class="nb" onclick="showTab('monthly',this)">FY Performance</button>
+  <button class="nb" onclick="showTab('clients',this)">Clients</button>
+  <button class="nb" onclick="showTab('accounts',this)">4 Accounts</button>
+</div>
+<div class="content">
+
+<!-- OVERVIEW -->
+<div id="tab-overview" class="tab active">
+  <div id="pipeline-alert"></div><div id="alert-box"></div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+  <span class="lbl" style="margin:0;">This Week — <span id="cwl"></span></span>
+  <div style="display:flex;align-items:center;gap:8px;">
+    <span style="font-size:8px;color:#315150;letter-spacing:1.5px;text-transform:uppercase;font-weight:700;">Weekly Navigator</span>
+    <button id="btn-prev" onclick="stepWeek(-1)" style="background:#191919;border:1px solid rgba(49,81,80,.5);border-radius:6px;color:#d0dbd6;font-size:12px;padding:5px 12px;cursor:pointer;font-family:inherit;">◀</button>
+    <button id="btn-next" onclick="stepWeek(1)" style="background:rgba(204,244,146,.1);border:1px solid rgba(204,244,146,.3);border-radius:6px;color:#ccf492;font-size:12px;padding:5px 12px;cursor:pointer;font-family:inherit;">▶</button>
+  </div>
+</div>
+  <div class="g2">
+    <div class="stat"><div class="bn" id="ov-open"></div><div class="sl">Opening Balance</div><div class="ss">Start of week</div></div>
+    <div class="stat clime"><div class="bn" id="ov-close"></div><div class="sl">Closing Bank Balance</div><div class="ss">Main Working Account</div></div>
+    <div class="stat"><div class="bn" id="ov-net"></div><div class="sl">Money In Minus Money Out</div><div class="ss">This week</div></div>
+    <div class="stat"><div class="bn" style="color:#3b82f6" id="ov-in"></div><div class="sl">Cash In</div><div class="ss">Total receipts</div></div>
+    <div class="stat"><div class="bn" style="color:#f59e0b" id="ov-out"></div><div class="sl">Cash Out</div><div class="ss">Total Payments Out</div></div>
+  </div>
+  <span class="lbl">Year to Date — FY2026 (1 Jul 2025 – 30 Jun 2026)</span>
+  <div class="g3">
+    <div class="stat"><div class="mn" style="color:#ccf492" id="ytd-sales"></div><div class="sl">Total Sales</div><div class="ss">FY26 to date</div></div>
+    <div class="stat"><div class="mn" style="color:#3b82f6" id="ytd-in"></div><div class="sl">Total In</div><div class="ss">FY26 to date</div></div>
+    <div class="stat"><div class="mn" style="color:#f59e0b" id="ytd-out"></div><div class="sl">Total Out</div><div class="ss">FY26 to date</div></div>
+  </div>
+  <span class="lbl">Revenue — FY Comparison</span>
+  <div class="card"><div class="cw"><canvas id="fy-chart"></canvas></div>
+    <div style="display:flex;justify-content:space-around;font-size:10px;color:#d0dbd6;margin-top:8px">
+      <div style="text-align:center"><div style="color:#475569;font-size:13px;font-weight:800" id="fy24v"></div><div style="opacity:.5">FY24</div></div>
+      <div style="text-align:center"><div style="color:#315150;font-size:13px;font-weight:800" id="fy25v"></div><div style="opacity:.5">FY25</div></div>
+      <div style="text-align:center"><div style="color:#ccf492;font-size:13px;font-weight:800" id="fy26v"></div><div style="opacity:.5">FY26 YTD</div></div>
+    </div>
+  </div>
+  <span class="lbl">12 Week Cash Position</span>
+  <div class="card"><div class="cw"><canvas id="bal-chart"></canvas></div></div>
+  <span class="lbl">Upcoming Cash Risks — Next 26 Weeks</span>
+  <div id="tight-weeks"></div>
+</div>
+
+<!-- WEEKLY -->
+<div id="tab-weekly" class="tab">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+    <span class="lbl" style="margin:0">Weekly Cashflow</span>
+    <div style="display:flex;gap:6px">
+      <button style="background:none;border:1px solid #315150;border-radius:5px;color:#d0dbd6;font-size:9px;padding:4px 10px;cursor:pointer;font-family:inherit" onclick="wf='ahead';renderWeekly()">Ahead</button>
+      <button style="background:none;border:1px solid #315150;border-radius:5px;color:#d0dbd6;font-size:9px;padding:4px 10px;cursor:pointer;font-family:inherit" onclick="wf='all';renderWeekly()">All</button>
+      <button style="background:none;border:1px solid rgba(239,68,68,.4);border-radius:5px;color:#ef4444;font-size:9px;padding:4px 10px;cursor:pointer;font-family:inherit" onclick="wf='tight';renderWeekly()">Tight</button>
+    </div>
+  </div>
+  <div id="weekly-list"></div>
+</div>
+
+<!-- MONTHLY -->
+<div id="tab-monthly" class="tab">
+  <span class="lbl">FY Performance View</span>
+  <div id="fy-pipeline-alert"></div>
+  <div id="monthly-list"></div>
+  <span class="lbl" style="margin-top:16px;display:block;">Monthly Net Cash Movement — FY2026 vs FY2025</span>
+  <div class="card" style="margin-bottom:14px;">
+    <div style="position:relative;height:220px;"><canvas id="fy-compare-chart"></canvas></div>
+  </div>
+</div>
+
+<!-- CLIENTS -->
+<div id="tab-clients" class="tab">
+  <span class="lbl">Client Receipts — FY2026 (1 Jul 2025 – 30 Jun 2026)</span>
+  <div id="client-list"></div>
+</div>
+
+<!-- 4 ACCOUNTS -->
+<div id="tab-accounts" class="tab">
+  <span class="lbl">Four Account System</span>
+  <div class="good">Your four account structure separates operating cash, tax obligations, savings, and profit reinvestment. Each account has a specific purpose. Never mix them.</div>
+
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px;">
+
+    <!-- Working Account -->
+    <div class="card clime" style="margin:0;">
+      <div style="font-size:11px;font-weight:700;color:#ccf492;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Working Account</div>
+      <div style="font-size:10px;color:#d0dbd6;opacity:.6;margin-bottom:10px;">Day to day operations</div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;">
+        <span style="color:#d0dbd6;opacity:.5;">Opening</span>
+        <span style="color:#ccf492;font-weight:800;font-size:15px;">$19,655</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:10px;">
+        <span style="color:#d0dbd6;opacity:.5;">Closing</span>
+        <span style="color:#ccf492;font-weight:800;font-size:15px;" id="wa-bal">$51,234</span>
+      </div>
+      <div style="padding-top:8px;border-top:1px solid rgba(49,81,80,.3);">
+        <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px;"><span style="color:#d0dbd6;opacity:.6;">This week in</span><span style="color:#3b82f6;font-weight:600;">$48,074</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;"><span style="color:#d0dbd6;opacity:.6;">This week out</span><span style="color:#f59e0b;font-weight:600;">$22,887</span></div>
+      </div>
+    </div>
+
+    <!-- Regulation Account -->
+    <div class="card" style="margin:0;border-color:rgba(59,130,246,.3);">
+      <div style="font-size:11px;font-weight:700;color:#3b82f6;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Regulation Account</div>
+      <div style="font-size:10px;color:#d0dbd6;opacity:.6;margin-bottom:10px;">Tax obligations only</div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;">
+        <span style="color:#d0dbd6;opacity:.5;">Opening</span>
+        <span style="color:#3b82f6;font-weight:800;font-size:15px;">$7,059</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:10px;">
+        <span style="color:#d0dbd6;opacity:.5;">Closing</span>
+        <span style="color:#3b82f6;font-weight:800;font-size:15px;">$7,059</span>
+      </div>
+      <div style="padding-top:8px;border-top:1px solid rgba(49,81,80,.3);">
+        <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px;"><span style="color:#d0dbd6;opacity:.6;">Super</span><span style="color:#3b82f6;">$1,044/wk</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px;"><span style="color:#d0dbd6;opacity:.6;">PAYG</span><span style="color:#3b82f6;">$2,000/wk</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;"><span style="color:#d0dbd6;opacity:.6;">BAS</span><span style="color:#3b82f6;">$1,456/wk</span></div>
+      </div>
+    </div>
+
+    <!-- Savings Account -->
+    <div class="card" style="margin:0;border-color:rgba(245,158,11,.3);">
+      <div style="font-size:11px;font-weight:700;color:#f59e0b;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Savings Account</div>
+      <div style="font-size:10px;color:#d0dbd6;opacity:.6;margin-bottom:10px;">$1,000 per week. Never touch.</div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;">
+        <span style="color:#d0dbd6;opacity:.5;">Opening</span>
+        <span style="color:#f59e0b;font-weight:800;font-size:15px;">$49,000</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:10px;">
+        <span style="color:#d0dbd6;opacity:.5;">Closing</span>
+        <span style="color:#f59e0b;font-weight:800;font-size:15px;">$50,000</span>
+      </div>
+      <div style="padding-top:8px;border-top:1px solid rgba(49,81,80,.3);">
+        <div style="font-size:8px;color:#d0dbd6;opacity:.5;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Projected — In 12 Months</div>
+        <div style="font-size:22px;font-weight:800;color:#f59e0b;">$102,000</div>
+      </div>
+    </div>
+
+    <!-- Profit Reinvestment -->
+    <div class="card" style="margin:0;border-color:rgba(139,92,246,.3);">
+      <div style="font-size:11px;font-weight:700;color:#8b5cf6;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Profit Reinvestment</div>
+      <div style="font-size:10px;color:#d0dbd6;opacity:.6;margin-bottom:10px;">Future capex. Growth.</div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;">
+        <span style="color:#d0dbd6;opacity:.5;">Opening</span>
+        <span style="color:#8b5cf6;font-weight:800;font-size:15px;">$0</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:10px;">
+        <span style="color:#d0dbd6;opacity:.5;">Closing</span>
+        <span style="color:#8b5cf6;font-weight:800;font-size:15px;">$0</span>
+      </div>
+      <div style="padding-top:8px;border-top:1px solid rgba(49,81,80,.3);">
+        <div style="font-size:8px;color:#d0dbd6;opacity:.5;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Projected — In 12 Months</div>
+        <div style="font-size:22px;font-weight:800;color:#8b5cf6;">$0</div>
+        <div style="font-size:9px;color:#8b5cf6;opacity:.7;margin-top:3px;">Ready when you are.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Total across all accounts -->
+  <div class="card card-lime" style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;">
+    <div>
+      <div style="font-size:9px;color:#d0dbd6;opacity:.6;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Total Across All Accounts</div>
+      <div style="font-size:26px;font-weight:800;color:#ccf492;">$108,293</div>
+    </div>
+    <div style="font-size:9px;color:#d0dbd6;opacity:.5;text-align:right;line-height:1.8;">
+      Working $51,234<br>Regulation $7,059<br>Savings $50,000<br>Profit $0
+    </div>
+  </div>
+
+  <span class="lbl">Finance Obligations</span>
+  <div style="display:flex;flex-direction:column;gap:6px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#191919;border:1px solid rgba(49,81,80,.3);border-radius:6px;font-size:11px;"><span>VW Amarok — Loan</span><span style="color:#f59e0b;font-weight:700;">Ends Feb 2028</span></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#191919;border:1px solid rgba(49,81,80,.3);border-radius:6px;font-size:11px;"><span>Hyster Forklift — P&amp;E Loan</span><span style="color:#f59e0b;font-weight:700;">Ends Aug 2027</span></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#191919;border:1px solid rgba(49,81,80,.3);border-radius:6px;font-size:11px;"><span>Isuzu Truck — Loan</span><span style="color:#f59e0b;font-weight:700;">Ends Dec 2029</span></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#191919;border:1px solid rgba(49,81,80,.3);border-radius:6px;font-size:11px;"><span>Solar Repayments</span><span style="color:#f59e0b;font-weight:700;">Ends Feb 2027</span></div>
+  </div>
+</div>
+<div class="footer">
+  <div style="display:flex;align-items:center;gap:8px">
+    <svg width="12" height="12" viewBox="0 0 206.33 212.6"><path fill="#315150" d="M8.84,98.81v27.09l80.78-39.1v33.07c0,10.65-6.09,20.37-15.68,25.01l-38.01,18.4v-26.43l-27.09,12.78v53.86l94.33-45.66,94.33,45.66v-53.88l-27.09-12.78v26.45l-38.01-18.4c-9.59-4.64-15.68-14.35-15.68-25.01v-33.07l80.78,39.1v-27.09l-94.33-45.66L8.84,98.81Z"/><polygon fill="#315150" points="103.17 9.11 8.84 54.77 8.84 81.86 103.17 36.2 197.49 81.86 197.49 54.77 103.17 9.11"/></svg>
+    <span class="ftxt">Greg Jones — No Fluff. No BS.</span>
+  </div>
+  <span class="ftxt">Cashflow FY2026</span>
+</div>
+
+<script>
+
+const CLIENTS=[{"name": "Christian College", "total": 253102, "invoices": 6, "last_payment": "26 Mar 2026", "contracted_ahead": 0, "lifetime": 1490154}, {"name": "David McDonald", "total": 230596, "invoices": 9, "last_payment": "25 Jun 2026", "contracted_ahead": 47499, "lifetime": 262379}, {"name": "Winstar Construction", "total": 116296, "invoices": 9, "last_payment": "11 Jun 2026", "contracted_ahead": 12095, "lifetime": 125264}, {"name": "Walker Construction Group", "total": 114649, "invoices": 6, "last_payment": "02 Apr 2026", "contracted_ahead": 0, "lifetime": 236407}, {"name": "VDB Homes", "total": 104608, "invoices": 7, "last_payment": "18 Jun 2026", "contracted_ahead": 10625, "lifetime": 674940}, {"name": "Deltex Constructions", "total": 98650, "invoices": 7, "last_payment": "18 Jun 2026", "contracted_ahead": 1928, "lifetime": 214830}, {"name": "27th Avenue Constructions", "total": 89539, "invoices": 2, "last_payment": "21 May 2026", "contracted_ahead": 0, "lifetime": 89539}, {"name": "Built By Wilson", "total": 71959, "invoices": 2, "last_payment": "11 Jun 2026", "contracted_ahead": 35979, "lifetime": 179897}, {"name": "Boorinda Pastoral Company", "total": 68000, "invoices": 1, "last_payment": "28 May 2026", "contracted_ahead": 0, "lifetime": 68000}, {"name": "Larkin", "total": 56044, "invoices": 3, "last_payment": "18 Jun 2026", "contracted_ahead": 30204, "lifetime": 201399}, {"name": "KBD Constructions", "total": 54375, "invoices": 2, "last_payment": "25 Jun 2026", "contracted_ahead": 32625, "lifetime": 54375}, {"name": "Cromer Builders", "total": 43102, "invoices": 5, "last_payment": "25 Jun 2026", "contracted_ahead": 5369, "lifetime": 223839}, {"name": "CL Constructions", "total": 26647, "invoices": 3, "last_payment": "18 Jun 2026", "contracted_ahead": 9354, "lifetime": 181830}, {"name": "Character Building", "total": 24206, "invoices": 3, "last_payment": "30 Apr 2026", "contracted_ahead": 0, "lifetime": 56026}, {"name": "Horizon Building", "total": 23691, "invoices": 3, "last_payment": "12 Feb 2026", "contracted_ahead": 0, "lifetime": 25123}, {"name": "Sons Construct", "total": 14805, "invoices": 2, "last_payment": "09 Apr 2026", "contracted_ahead": 0, "lifetime": 14805}, {"name": "TG Builders", "total": 13908, "invoices": 2, "last_payment": "05 Mar 2026", "contracted_ahead": 0, "lifetime": 88855}, {"name": "Enzie", "total": 10632, "invoices": 4, "last_payment": "28 May 2026", "contracted_ahead": 0, "lifetime": 33864}, {"name": "RMS Traders", "total": 8797, "invoices": 3, "last_payment": "07 May 2026", "contracted_ahead": 0, "lifetime": 8797}, {"name": "Grylls Constructions", "total": 3324, "invoices": 2, "last_payment": "27 Nov 2025", "contracted_ahead": 0, "lifetime": 3324}, {"name": "Avery Constructions", "total": 3118, "invoices": 1, "last_payment": "28 Aug 2025", "contracted_ahead": 0, "lifetime": 541866}, {"name": "A & G Pengelly", "total": 2750, "invoices": 1, "last_payment": "21 May 2026", "contracted_ahead": 0, "lifetime": 3200}, {"name": "Zeally Build", "total": 2277, "invoices": 3, "last_payment": "28 May 2026", "contracted_ahead": 0, "lifetime": 34640}];
+const FY25_NET=[-20186, 73208, 1126, 27218, -24271, 20727, -47797, 10777, 43081, -40139, -2299, -51379];
+
+const WEEKLY=[{"idx": 0, "label": "03 Jul 25", "iso": "2025-07-03", "opening": -28889.79, "sales": 0.0, "other_income": 11849.0, "total_in": 11849.0, "supplier": 16871.49, "total_out": 30205.02, "closing": -47245.81}, {"idx": 1, "label": "10 Jul 25", "iso": "2025-07-10", "opening": -47245.81, "sales": 21540.86, "other_income": 0.0, "total_in": 21540.86, "supplier": 0.0, "total_out": 20809.01, "closing": -46513.96}, {"idx": 2, "label": "17 Jul 25", "iso": "2025-07-17", "opening": -46513.96, "sales": 9192.2, "other_income": 0.0, "total_in": 9192.2, "supplier": 0.0, "total_out": 10404.72, "closing": -47726.48}, {"idx": 3, "label": "24 Jul 25", "iso": "2025-07-24", "opening": -47726.48, "sales": 0.0, "other_income": 9230.0, "total_in": 9230.0, "supplier": 755.19, "total_out": 23311.27, "closing": -61807.75}, {"idx": 4, "label": "31 Jul 25", "iso": "2025-07-31", "opening": -61807.75, "sales": 46518.83, "other_income": 9000.0, "total_in": 55518.83, "supplier": 702.41, "total_out": 13662.03, "closing": -19950.95}, {"idx": 5, "label": "07 Aug 25", "iso": "2025-08-07", "opening": -19950.95, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 14963.49, "total_out": 33543.46, "closing": -53494.41}, {"idx": 6, "label": "14 Aug 25", "iso": "2025-08-14", "opening": -53494.41, "sales": 0.0, "other_income": 3500.0, "total_in": 3500.0, "supplier": 1637.0, "total_out": 14949.41, "closing": -64943.82}, {"idx": 7, "label": "21 Aug 25", "iso": "2025-08-21", "opening": -64943.82, "sales": 88582.81, "other_income": 0.0, "total_in": 88582.81, "supplier": 19817.51, "total_out": 41730.72, "closing": -18091.73}, {"idx": 8, "label": "28 Aug 25", "iso": "2025-08-28", "opening": -18091.73, "sales": 32272.0, "other_income": 467.04, "total_in": 32739.04, "supplier": 14933.0, "total_out": 28958.52, "closing": -14311.21}, {"idx": 9, "label": "04 Sep 25", "iso": "2025-09-04", "opening": -14311.21, "sales": 9900.0, "other_income": 0.0, "total_in": 9900.0, "supplier": 10691.5, "total_out": 27593.55, "closing": -32004.76}, {"idx": 10, "label": "11 Sep 25", "iso": "2025-09-11", "opening": -32004.76, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 9284.79, "closing": -41289.55}, {"idx": 11, "label": "18 Sep 25", "iso": "2025-09-18", "opening": -41289.55, "sales": 13250.44, "other_income": 0.0, "total_in": 13250.44, "supplier": 11379.28, "total_out": 30054.43, "closing": -58093.54}, {"idx": 12, "label": "25 Sep 25", "iso": "2025-09-25", "opening": -58093.54, "sales": 11000.0, "other_income": 0.0, "total_in": 11000.0, "supplier": 14537.83, "total_out": 27251.22, "closing": -74344.76}, {"idx": 13, "label": "02 Oct 25", "iso": "2025-10-02", "opening": -74344.76, "sales": 0.0, "other_income": 23000.0, "total_in": 23000.0, "supplier": 5070.68, "total_out": 33286.84, "closing": -84631.6}, {"idx": 14, "label": "09 Oct 25", "iso": "2025-10-09", "opening": -84631.6, "sales": 17545.61, "other_income": 9900.0, "total_in": 27445.61, "supplier": 3184.14, "total_out": 12513.86, "closing": -69699.85}, {"idx": 15, "label": "16 Oct 25", "iso": "2025-10-16", "opening": -69699.85, "sales": 50400.0, "other_income": 4560.0, "total_in": 54960.0, "supplier": 11815.9, "total_out": 28669.01, "closing": -43408.86}, {"idx": 16, "label": "23 Oct 25", "iso": "2025-10-23", "opening": -43408.86, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 10743.21, "closing": -54152.07}, {"idx": 17, "label": "30 Oct 25", "iso": "2025-10-30", "opening": -54152.07, "sales": 2061.99, "other_income": 0.0, "total_in": 2061.99, "supplier": 174.27, "total_out": 20874.52, "closing": -72964.6}, {"idx": 18, "label": "06 Nov 25", "iso": "2025-11-06", "opening": -72964.6, "sales": 25060.7, "other_income": 11000.0, "total_in": 36060.7, "supplier": 7106.0, "total_out": 26991.85, "closing": -63895.75}, {"idx": 19, "label": "13 Nov 25", "iso": "2025-11-13", "opening": -63895.75, "sales": 24535.27, "other_income": 0.0, "total_in": 24535.27, "supplier": 12809.54, "total_out": 30051.21, "closing": -69411.69}, {"idx": 20, "label": "20 Nov 25", "iso": "2025-11-20", "opening": -69411.69, "sales": 0.0, "other_income": 2000.0, "total_in": 2000.0, "supplier": 8068.76, "total_out": 19766.93, "closing": -87178.62}, {"idx": 21, "label": "27 Nov 25", "iso": "2025-11-27", "opening": -87178.62, "sales": 91677.31, "other_income": 5700.0, "total_in": 97377.31, "supplier": 7818.45, "total_out": 28439.37, "closing": -18240.68}, {"idx": 22, "label": "04 Dec 25", "iso": "2025-12-04", "opening": -18240.68, "sales": 12035.98, "other_income": 0.0, "total_in": 12035.98, "supplier": 6146.45, "total_out": 23627.28, "closing": -29831.98}, {"idx": 23, "label": "11 Dec 25", "iso": "2025-12-11", "opening": -29831.98, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 27747.61, "total_out": 46543.83, "closing": -76375.81}, {"idx": 24, "label": "18 Dec 25", "iso": "2025-12-18", "opening": -76375.81, "sales": 4868.65, "other_income": 0.0, "total_in": 4868.65, "supplier": 0.0, "total_out": 9925.45, "closing": -81432.61}, {"idx": 25, "label": "25 Dec 25", "iso": "2025-12-25", "opening": -81432.61, "sales": 116673.77, "other_income": 0.0, "total_in": 116673.77, "supplier": 20078.86, "total_out": 42308.42, "closing": -7067.26}, {"idx": 26, "label": "01 Jan 26", "iso": "2026-01-01", "opening": -7067.26, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 12445.74, "closing": -19513.0}, {"idx": 27, "label": "08 Jan 26", "iso": "2026-01-08", "opening": -19513.0, "sales": 16190.47, "other_income": 0.0, "total_in": 16190.47, "supplier": 19865.71, "total_out": 38257.71, "closing": -41580.24}, {"idx": 28, "label": "15 Jan 26", "iso": "2026-01-15", "opening": -41580.24, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 9238.88, "closing": -50819.12}, {"idx": 29, "label": "22 Jan 26", "iso": "2026-01-22", "opening": -50819.12, "sales": 73290.9, "other_income": 0.0, "total_in": 73290.9, "supplier": 13848.21, "total_out": 33721.29, "closing": -11249.51}, {"idx": 30, "label": "29 Jan 26", "iso": "2026-01-29", "opening": -11249.51, "sales": 9985.08, "other_income": 0.0, "total_in": 9985.08, "supplier": 35625.71, "total_out": 55853.69, "closing": -57118.12}, {"idx": 31, "label": "05 Feb 26", "iso": "2026-02-05", "opening": -57118.12, "sales": 57144.21, "other_income": 0.0, "total_in": 57144.21, "supplier": 4636.07, "total_out": 23462.6, "closing": -23436.51}, {"idx": 32, "label": "12 Feb 26", "iso": "2026-02-12", "opening": -23436.51, "sales": 7748.38, "other_income": 0.0, "total_in": 7748.38, "supplier": 31341.99, "total_out": 40702.32, "closing": -56390.45}, {"idx": 33, "label": "19 Feb 26", "iso": "2026-02-19", "opening": -56390.45, "sales": 18132.67, "other_income": 0.0, "total_in": 18132.67, "supplier": 10957.84, "total_out": 38312.05, "closing": -76569.83}, {"idx": 34, "label": "26 Feb 26", "iso": "2026-02-26", "opening": -76569.83, "sales": 49127.0, "other_income": 0.0, "total_in": 49127.0, "supplier": 1326.02, "total_out": 17128.53, "closing": -44571.36}, {"idx": 35, "label": "05 Mar 26", "iso": "2026-03-05", "opening": -44571.36, "sales": 8344.97, "other_income": 0.0, "total_in": 8344.97, "supplier": 13430.05, "total_out": 31325.37, "closing": -67551.76}, {"idx": 36, "label": "12 Mar 26", "iso": "2026-03-12", "opening": -67551.76, "sales": 27982.22, "other_income": 0.0, "total_in": 27982.22, "supplier": 0.0, "total_out": 8553.93, "closing": -48123.47}, {"idx": 37, "label": "19 Mar 26", "iso": "2026-03-19", "opening": -48123.47, "sales": 42047.12, "other_income": 0.0, "total_in": 42047.12, "supplier": 3421.0, "total_out": 32365.4, "closing": -38441.75}, {"idx": 38, "label": "26 Mar 26", "iso": "2026-03-26", "opening": -38441.75, "sales": 17868.93, "other_income": 0.0, "total_in": 17868.93, "supplier": 28121.47, "total_out": 37784.02, "closing": -58356.84}, {"idx": 39, "label": "02 Apr 26", "iso": "2026-04-02", "opening": -58356.84, "sales": 2818.87, "other_income": 0.0, "total_in": 2818.87, "supplier": 2413.4, "total_out": 21943.13, "closing": -77481.1}, {"idx": 40, "label": "09 Apr 26", "iso": "2026-04-09", "opening": -77481.1, "sales": 24671.61, "other_income": 0.0, "total_in": 24671.61, "supplier": 7182.47, "total_out": 22191.4, "closing": -75000.89}, {"idx": 41, "label": "16 Apr 26", "iso": "2026-04-16", "opening": -75000.89, "sales": 39673.0, "other_income": 13880.34, "total_in": 53553.34, "supplier": 14188.63, "total_out": 31711.68, "closing": -53159.23}, {"idx": 42, "label": "23 Apr 26", "iso": "2026-04-23", "opening": -53159.23, "sales": 7514.32, "other_income": 0.0, "total_in": 7514.32, "supplier": 701.82, "total_out": 15869.22, "closing": -61514.13}, {"idx": 43, "label": "30 Apr 26", "iso": "2026-04-30", "opening": -61514.13, "sales": 104278.23, "other_income": 0.0, "total_in": 104278.23, "supplier": 9672.95, "total_out": 33493.64, "closing": 9270.46}, {"idx": 44, "label": "07 May 26", "iso": "2026-05-07", "opening": 9270.46, "sales": 16842.91, "other_income": 3000.0, "total_in": 19842.91, "supplier": 22272.3, "total_out": 34306.87, "closing": -5193.5}, {"idx": 45, "label": "14 May 26", "iso": "2026-05-14", "opening": -5193.5, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 9447.8, "total_out": 31945.31, "closing": -37138.81}, {"idx": 46, "label": "21 May 26", "iso": "2026-05-21", "opening": -37138.81, "sales": 56893.68, "other_income": 0.0, "total_in": 56893.68, "supplier": 24483.36, "total_out": 36837.53, "closing": -17082.66}, {"idx": 47, "label": "28 May 26", "iso": "2026-05-28", "opening": -17082.66, "sales": 71662.0, "other_income": 216.58, "total_in": 71878.58, "supplier": 11647.04, "total_out": 37475.16, "closing": 17320.76}, {"idx": 48, "label": "04 Jun 26", "iso": "2026-06-04", "opening": 17320.76, "sales": 12359.05, "other_income": 0.0, "total_in": 12359.05, "supplier": 23210.9, "total_out": 40837.26, "closing": -11157.45}, {"idx": 49, "label": "11 Jun 26", "iso": "2026-06-11", "opening": -11157.45, "sales": 48576.91, "other_income": 0.0, "total_in": 48576.91, "supplier": 1444.57, "total_out": 17764.34, "closing": 19655.12}, {"idx": 50, "label": "18 Jun 26", "iso": "2026-06-18", "opening": 19655.12, "sales": 58246.45, "other_income": 0.0, "total_in": 58246.45, "supplier": 10314.1, "total_out": 26667.63, "closing": 51233.94}, {"idx": 51, "label": "25 Jun 26", "iso": "2026-06-25", "opening": 51233.94, "sales": 92124.01, "other_income": 0.0, "total_in": 92124.01, "supplier": 7020.2, "total_out": 27960.0, "closing": 115397.95}, {"idx": 52, "label": "02 Jul 26", "iso": "2026-07-02", "opening": 115397.95, "sales": 46441.42, "other_income": 0.0, "total_in": 46441.42, "supplier": 38286.71, "total_out": 48343.13, "closing": 113496.24}, {"idx": 53, "label": "09 Jul 26", "iso": "2026-07-09", "opening": 113496.24, "sales": 136769.66, "other_income": 0.0, "total_in": 136769.66, "supplier": 0.0, "total_out": 16794.66, "closing": 233471.24}, {"idx": 54, "label": "16 Jul 26", "iso": "2026-07-16", "opening": 233471.24, "sales": 5000.0, "other_income": 0.0, "total_in": 5000.0, "supplier": 0.0, "total_out": 16442.52, "closing": 222028.72}, {"idx": 55, "label": "23 Jul 26", "iso": "2026-07-23", "opening": 222028.72, "sales": 116100.31, "other_income": 0.0, "total_in": 116100.31, "supplier": 0.0, "total_out": 21967.46, "closing": 316161.57}, {"idx": 56, "label": "30 Jul 26", "iso": "2026-07-30", "opening": 316161.57, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 2885.79, "total_out": 12942.21, "closing": 303219.36}, {"idx": 57, "label": "06 Aug 26", "iso": "2026-08-06", "opening": 303219.36, "sales": 25000.0, "other_income": 0.0, "total_in": 25000.0, "supplier": 60000.0, "total_out": 76794.66, "closing": 251424.7}, {"idx": 58, "label": "13 Aug 26", "iso": "2026-08-13", "opening": 251424.7, "sales": 49074.51, "other_income": 0.0, "total_in": 49074.51, "supplier": 0.0, "total_out": 8194.66, "closing": 292304.55}, {"idx": 59, "label": "20 Aug 26", "iso": "2026-08-20", "opening": 292304.55, "sales": 107935.84, "other_income": 0.0, "total_in": 107935.84, "supplier": 0.0, "total_out": 25042.52, "closing": 375197.87}, {"idx": 60, "label": "27 Aug 26", "iso": "2026-08-27", "opening": 375197.87, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 13367.46, "closing": 361830.41}, {"idx": 61, "label": "03 Sep 26", "iso": "2026-09-03", "opening": 361830.41, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 18656.42, "closing": 343173.99}, {"idx": 62, "label": "10 Sep 26", "iso": "2026-09-10", "opening": 343173.99, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 8194.66, "closing": 334979.33}, {"idx": 63, "label": "17 Sep 26", "iso": "2026-09-17", "opening": 334979.33, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 16794.66, "closing": 318184.67}, {"idx": 64, "label": "24 Sep 26", "iso": "2026-09-24", "opening": 318184.67, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 16442.52, "closing": 301742.15}, {"idx": 65, "label": "01 Oct 26", "iso": "2026-10-01", "opening": 301742.15, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 21967.46, "closing": 279774.69}, {"idx": 66, "label": "08 Oct 26", "iso": "2026-10-08", "opening": 279774.69, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 10056.42, "closing": 269718.27}, {"idx": 67, "label": "15 Oct 26", "iso": "2026-10-15", "opening": 269718.27, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 16794.66, "closing": 252923.61}, {"idx": 68, "label": "22 Oct 26", "iso": "2026-10-22", "opening": 252923.61, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 8194.66, "closing": 244728.95}, {"idx": 69, "label": "29 Oct 26", "iso": "2026-10-29", "opening": 244728.95, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 25042.52, "closing": 219686.43}, {"idx": 70, "label": "05 Nov 26", "iso": "2026-11-05", "opening": 219686.43, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 13367.46, "closing": 206318.97}, {"idx": 71, "label": "12 Nov 26", "iso": "2026-11-12", "opening": 206318.97, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 18656.42, "closing": 187662.55}, {"idx": 72, "label": "19 Nov 26", "iso": "2026-11-19", "opening": 187662.55, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 8194.66, "closing": 179467.89}, {"idx": 73, "label": "26 Nov 26", "iso": "2026-11-26", "opening": 179467.89, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 16794.66, "closing": 162673.23}, {"idx": 74, "label": "03 Dec 26", "iso": "2026-12-03", "opening": 162673.23, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 16442.52, "closing": 146230.71}, {"idx": 75, "label": "10 Dec 26", "iso": "2026-12-10", "opening": 146230.71, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 21967.46, "closing": 124263.25}, {"idx": 76, "label": "17 Dec 26", "iso": "2026-12-17", "opening": 124263.25, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 10056.42, "closing": 114206.83}, {"idx": 77, "label": "24 Dec 26", "iso": "2026-12-24", "opening": 114206.83, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 16794.66, "closing": 97412.17}, {"idx": 78, "label": "31 Dec 26", "iso": "2026-12-31", "opening": 97412.17, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 8194.66, "closing": 89217.51}, {"idx": 79, "label": "07 Jan 27", "iso": "2027-01-07", "opening": 89217.51, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 25042.52, "closing": 64174.99}, {"idx": 80, "label": "14 Jan 27", "iso": "2027-01-14", "opening": 64174.99, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 13367.46, "closing": 50807.53}, {"idx": 81, "label": "21 Jan 27", "iso": "2027-01-21", "opening": 50807.53, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 18656.42, "closing": 32151.11}, {"idx": 82, "label": "28 Jan 27", "iso": "2027-01-28", "opening": 32151.11, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 8194.66, "closing": 23956.45}];
+const MONTHLY=[{"label": "Jul 2025", "in": 107331, "out": 98392, "net": 8939}, {"label": "Aug 2025", "in": 124822, "out": 119182, "net": 5640}, {"label": "Sep 2025", "in": 34150, "out": 94184, "net": -60034}, {"label": "Oct 2025", "in": 107468, "out": 106087, "net": 1380}, {"label": "Nov 2025", "in": 159973, "out": 105249, "net": 54724}, {"label": "Dec 2025", "in": 133578, "out": 122405, "net": 11173}, {"label": "Jan 2026", "in": 99466, "out": 149517, "net": -50051}, {"label": "Feb 2026", "in": 132152, "out": 119606, "net": 12547}, {"label": "Mar 2026", "in": 96243, "out": 110029, "net": -13785}, {"label": "Apr 2026", "in": 192836, "out": 125209, "net": 67627}, {"label": "May 2026", "in": 148615, "out": 140565, "net": 8050}, {"label": "Jun 2026", "in": 211306, "out": 113229, "net": 98077}, {"label": "Jul 2026", "in": 304311, "out": 116490, "net": 187821}, {"label": "Aug 2026", "in": 182010, "out": 123399, "net": 58611}, {"label": "Sep 2026", "in": 0, "out": 60088, "net": -60088}, {"label": "Oct 2026", "in": 0, "out": 82056, "net": -82056}, {"label": "Nov 2026", "in": 0, "out": 57013, "net": -57013}, {"label": "Dec 2026", "in": 0, "out": 73456, "net": -73456}, {"label": "Jan 2027", "in": 0, "out": 65261, "net": -65261}];
+const YTD={"in": 1397572, "out": 1349027, "sales": 1290269};
+const FY={"fy24": 1366847, "fy25": 1778875};
+const CW_IDX=50;
+
+const fmt=n=>'$'+Math.abs(Math.round(n)).toLocaleString();
+const fmtK=n=>{const s=n<0?'-':'';return s+'$'+Math.abs(Math.round(n)).toLocaleString()};
+let wf='ahead',expW=null,moChart=null,viewIdx=CW_IDX;
+
+function showTab(n,b){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.nb').forEach(x=>x.classList.remove('active'));
+  document.getElementById('tab-'+n).classList.add('active');
+  b.classList.add('active');
+  if(n==='monthly'){renderMonthly();}
+  if(n==='clients'){renderClients();}
+}
+
+
+function checkPipeline(){
+  var today = new Date();
+  var futureMonths = MONTHLY.filter(function(m){
+    var parts = m.label.split(' ');
+    var mo = parts[0];
+    var yr = parseInt(parts[1]);
+    var moIdx = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].indexOf(mo);
+    var d = new Date(yr, moIdx, 1);
+    return d > today;
+  });
+
+  // Find all triggered month labels
+  var triggeredLabels = {};
+  var firstTrigger = '';
+  for(var i=0; i<futureMonths.length-1; i++){
+    var combined = futureMonths[i].in + futureMonths[i+1].in;
+    if(combined < 100000){
+      triggeredLabels[futureMonths[i].label] = true;
+      triggeredLabels[futureMonths[i+1].label] = true;
+      if(!firstTrigger) firstTrigger = futureMonths[i].label + ' & ' + futureMonths[i+1].label;
+    }
+  }
+  var triggered = Object.keys(triggeredLabels).length > 0;
+  return {triggered: triggered, months: firstTrigger, triggeredLabels: triggeredLabels};
+}
+
+function renderOverview(){
+  const CW=WEEKLY[viewIdx]||{};
+  const net=(CW.total_in||0)-(CW.total_out||0);
+  const cl=CW.closing||0;
+  document.getElementById('cwl').textContent = (CW.label||'—') + (viewIdx === CW_IDX ? ' — Live' : '');
+  const ce=document.getElementById('ov-close');
+  ce.textContent=fmtK(cl);
+  ce.style.color=cl<0?'#ef4444':cl<5000?'#f59e0b':'#ccf492';
+  const ne=document.getElementById('ov-net');
+  ne.textContent=(net>=0?'+':'')+fmtK(net);
+  ne.style.color=net>=0?'#ccf492':'#ef4444';
+  const oe=document.getElementById('ov-open');
+  oe.textContent=fmtK(CW.opening||0);
+  oe.style.color=(CW.opening||0)<0?'#ef4444':(CW.opening||0)<5000?'#f59e0b':'#d0dbd6';
+  document.getElementById('ov-in').textContent=fmtK(CW.total_in||0);
+  document.getElementById('ov-out').textContent=fmtK(CW.total_out||0);
+  document.getElementById('ytd-sales').textContent=fmtK(YTD.sales);
+  document.getElementById('ytd-in').textContent=fmtK(YTD.in);
+  document.getElementById('ytd-out').textContent=fmtK(YTD.out);
+  var waBal=document.getElementById('wa-bal'); if(waBal) waBal.textContent=fmtK(cl);
+  document.getElementById('fy24v').textContent=fmt(FY.fy24);
+  document.getElementById('fy25v').textContent=fmt(FY.fy25);
+  document.getElementById('fy26v').textContent=fmt(YTD.sales)+' YTD';
+
+  const ab=document.getElementById('alert-box');
+  const todayDate=new Date();
+  const isEndOfFY=todayDate.getMonth()===5;
+  const daysToFYEnd=Math.ceil((new Date(todayDate.getFullYear(),5,30)-todayDate)/(1000*60*60*24));
+  const fyWarning=isEndOfFY?'<div class="warn" style="margin-bottom:8px;">📅 End of Financial Year — '+daysToFYEnd+' days remaining in FY2026 (ends 30 June 2026). Ensure all invoices, reconciliations and BAS are up to date.</div>':'';
+  if(cl<0)ab.innerHTML=fyWarning+'<div class="alert">⚠ Closing balance is negative this week ('+fmt(cl)+'). Review payments and receipts immediately.</div>';
+  else if(cl<5000)ab.innerHTML=fyWarning+'<div class="warn">⚡ Cash is tight this week. Closing balance '+fmt(cl)+'. Monitor closely.</div>';
+  else ab.innerHTML=fyWarning;
+
+  // Pipeline check
+  var pipeline = checkPipeline();
+  var pipelineEl = document.getElementById('pipeline-alert');
+  if(pipelineEl){
+    if(pipeline.triggered){
+      var div = document.createElement('div');
+      div.style.cssText = 'background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:12px 16px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;';
+      div.onclick = function(){ showTab('monthly', document.querySelectorAll('.nb')[2]); };
+      div.innerHTML = '<div><div style="font-size:12px;font-weight:700;color:#ef4444;margin-bottom:3px;">⚠ Pipeline Issue — Revenue Gap</div><div style="font-size:10px;color:#fca5a5;">'+pipeline.months+' combined projected income under $100,000. Review your pipeline now.</div></div><div style="font-size:10px;color:#ef4444;font-weight:700;white-space:nowrap;margin-left:12px;">View FY Performance ▶</div>';
+      pipelineEl.innerHTML = '';
+      pipelineEl.appendChild(div);
+      document.getElementById('risk-badge').style.display='block';
+    } else {
+      pipelineEl.innerHTML='';
+    }
+  }
+
+  new Chart(document.getElementById('fy-chart'),{type:'bar',data:{labels:['FY2024\n(Jul 23–Jun 24)','FY2025\n(Jul 24–Jun 25)','FY2026 YTD\n(Jul 25–Jun 26)'],datasets:[{data:[FY.fy24,FY.fy25,YTD.sales],backgroundColor:['rgba(71,85,105,.6)','rgba(49,81,80,.8)','rgba(204,244,146,.8)'],borderColor:['#475569','#315150','#ccf492'],borderWidth:1,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>fmtK(ctx.raw)}}},scales:{x:{grid:{color:'rgba(49,81,80,.2)'},ticks:{color:'#d0dbd6',font:{size:10}}},y:{grid:{color:'rgba(49,81,80,.2)'},ticks:{color:'#d0dbd6',font:{size:9},callback:v=>fmtK(v)}}}}});
+
+  const n12=WEEKLY.slice(viewIdx,viewIdx+12);
+  new Chart(document.getElementById('bal-chart'),{type:'line',data:{labels:n12.map(w=>w.label.slice(0,6)),datasets:[{label:'Closing',data:n12.map(w=>w.closing),borderColor:'#ccf492',backgroundColor:'rgba(204,244,146,.08)',fill:true,tension:0.3,pointBackgroundColor:n12.map(w=>w.closing<0?'#ef4444':w.closing<5000?'#f59e0b':'#ccf492'),pointRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>fmt(ctx.raw)}}},scales:{x:{grid:{color:'rgba(49,81,80,.2)'},ticks:{color:'#d0dbd6',font:{size:9}}},y:{grid:{color:'rgba(49,81,80,.2)'},ticks:{color:'#d0dbd6',font:{size:9},callback:v=>fmtK(v)}}}}});
+
+  const tight=WEEKLY.slice(viewIdx,viewIdx+26).filter(w=>w.closing<5000);
+  const tw=document.getElementById('tight-weeks');
+  if(tight.length===0){tw.innerHTML='<div class="good">No cash risk weeks in the next 26 weeks. Looking solid.</div>';}
+  else{
+    if(tight.some(w=>w.closing<0))document.getElementById('risk-badge').style.display='block';
+    tw.innerHTML=tight.map(w=>`<div class="card ${w.closing<0?'cred':'camber'}" style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:12px;color:#fff;font-weight:700">Week of ${w.label}</div><div style="font-size:9px;color:#d0dbd6;opacity:.6;margin-top:2px">In: ${fmt(w.total_in)} · Out: ${fmt(w.total_out)}</div></div><div style="font-size:16px;font-weight:800;color:${w.closing<0?'#ef4444':'#f59e0b'}">${fmtK(w.closing)}</div></div>`).join('');
+  }
+}
+
+function stepWeek(dir){
+  const newIdx = viewIdx + dir;
+  if(newIdx < 0 || newIdx >= WEEKLY.length) return;
+  viewIdx = newIdx;
+  Chart.getChart('fy-chart')?.destroy();
+  Chart.getChart('bal-chart')?.destroy();
+  renderOverview();
+  // Update back button visibility
+  document.getElementById('btn-prev').style.opacity = viewIdx <= 0 ? '0.3' : '1';
+  document.getElementById('btn-next').style.opacity = viewIdx >= WEEKLY.length-1 ? '0.3' : '1';
+  // Highlight if not current week
+  document.getElementById('btn-prev').style.borderColor = viewIdx === CW_IDX ? 'rgba(49,81,80,.5)' : 'rgba(204,244,146,.3)';
+  document.getElementById('btn-prev').style.color = viewIdx === CW_IDX ? '#d0dbd6' : '#ccf492';
+}
+
+function renderWeekly(){
+  var pl=checkPipeline();
+  var plLabels=pl.triggeredLabels||{};
+  var weeks=WEEKLY;
+  if(wf==='ahead') weeks=WEEKLY.slice(CW_IDX);
+  if(wf==='tight') weeks=WEEKLY.filter(function(w){return w.closing<5000;});
+
+  var monthGroups={};
+  var monthOrder=[];
+  weeks.forEach(function(w){
+    var m=w.iso.slice(0,7);
+    if(!monthGroups[m]){monthGroups[m]=[];monthOrder.push(m);}
+    monthGroups[m].push(w);
+  });
+
+  var html='';
+  monthOrder.forEach(function(m){
+    var mweeks=monthGroups[m];
+    var dt=new Date(m+'-01');
+    var monthLabel=dt.toLocaleDateString('en-AU',{month:'long',year:'numeric'});
+
+    html+='<div style="margin-bottom:24px;">';
+    html+='<div style="font-size:10px;font-weight:700;color:#d0dbd6;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid rgba(49,81,80,.3);">'+monthLabel+'</div>';
+    html+='<table style="width:100%;border-collapse:separate;border-spacing:6px 0;table-layout:fixed;"><tr>';
+
+    mweeks.forEach(function(w){
+      var isc=w.idx===CW_IDX;
+      var isn=w.closing<0;
+      var ist=w.closing<5000&&!isn;
+      var net=w.total_in-w.total_out;
+      var bc=isn?'rgba(239,68,68,.5)':ist?'rgba(245,158,11,.4)':isc?'rgba(204,244,146,.4)':'rgba(49,81,80,.4)';
+      var bg=isc?'rgba(204,244,146,.04)':'#191919';
+      var cc=isn?'#ef4444':ist?'#f59e0b':'#ccf492';
+      var nc=net>=0?'#ccf492':'#ef4444';
+      var exp=expW===w.idx;
+      var dateLabel=isc?'▶ '+w.label+' — Live':w.label;
+
+      // Check if this week is in a pipeline issue month
+      var wDt=new Date(w.iso+'T00:00:00');
+      var wMonths=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      var wMonthKey=wMonths[wDt.getMonth()]+' '+wDt.getFullYear();
+      var isPL=plLabels[wMonthKey]||false;
+      if(isPL) bc='rgba(239,68,68,.6)';
+
+      html+='<td style="vertical-align:top;padding:0;">';
+      html+='<div'+(isPL?' class="pipeline-pulse"':'')+' onclick="toggleW('+w.idx+')" style="background:'+bg+';border:1px solid '+bc+';border-radius:'+(exp?'8px 8px 0 0':'8px')+';padding:14px;cursor:pointer;">';
+      html+='<div style="font-size:11px;font-weight:700;color:'+(isc?'#ccf492':'#d0dbd6')+';margin-bottom:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+dateLabel+'</div>';
+      html+='<div style="font-size:9px;color:#d0dbd6;opacity:.5;text-transform:uppercase;letter-spacing:1px;margin-bottom:2px;">Closing</div>';
+      html+='<div style="font-size:18px;font-weight:800;color:'+cc+';margin-bottom:8px;">'+fmt(w.closing)+'</div>';
+      html+='<div style="padding-top:8px;border-top:1px solid rgba(49,81,80,.3);">';
+      html+='<div style="font-size:9px;color:#d0dbd6;opacity:.5;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Net Cash Movement</div>';
+      html+='<div style="font-size:13px;font-weight:700;color:'+nc+';margin-bottom:6px;">'+(net>=0?'+':'-')+fmt(Math.abs(net))+'</div>';
+      html+='<div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px;"><span style="color:#d0dbd6;opacity:.7;">In</span><span style="color:#3b82f6;font-weight:600;">'+fmt(w.total_in)+'</span></div>';
+      html+='<div style="display:flex;justify-content:space-between;font-size:10px;"><span style="color:#d0dbd6;opacity:.7;">Out</span><span style="color:#f59e0b;font-weight:600;">'+fmt(w.total_out)+'</span></div>';
+      html+='</div></div>';
+
+      if(exp){
+        html+='<div style="background:#000;border:1px solid '+bc+';border-top:none;border-radius:0 0 8px 8px;padding:10px;">';
+        html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">';
+        html+='<div><div style="font-size:8px;color:#ccf492;font-weight:700;margin-bottom:4px;letter-spacing:1px;text-transform:uppercase;">Cash In</div>';
+        html+='<div class="ei"><span>Sales</span><span style="color:#ccf492;">'+fmt(w.sales)+'</span></div>';
+        html+='<div class="ei"><span>Other</span><span style="color:#3b82f6;">'+fmt(w.other_income)+'</span></div>';
+        html+='<div class="ei" style="border:none;"><span style="font-weight:700;">Total</span><span style="color:#ccf492;font-weight:700;">'+fmt(w.total_in)+'</span></div></div>';
+        html+='<div><div style="font-size:8px;color:#f59e0b;font-weight:700;margin-bottom:4px;letter-spacing:1px;text-transform:uppercase;">Cash Out</div>';
+        html+='<div class="ei"><span>Suppliers</span><span style="color:#f59e0b;">'+fmt(w.supplier)+'</span></div>';
+        html+='<div class="ei"><span>Other</span><span style="color:#f59e0b;">'+fmt(Math.max(0,w.total_out-w.supplier))+'</span></div>';
+        html+='<div class="ei" style="border:none;"><span style="font-weight:700;">Total</span><span style="color:#f59e0b;font-weight:700;">'+fmt(w.total_out)+'</span></div></div>';
+        html+='</div>';
+        html+='<div style="margin-top:6px;font-size:8px;color:#d0dbd6;opacity:.4;">Open: '+fmt(w.opening)+' → Close: '+fmt(w.closing)+'</div>';
+        html+='</div>';
+      }
+      html+='</td>';
+    });
+
+    html+='</tr></table></div>';
+  });
+
+  document.getElementById('weekly-list').innerHTML=html;
+}
+
+
+function toggleW(idx){expW=expW===idx?null:idx;renderWeekly();}
+
+function renderMonthly(){
+
+  // Pipeline alert on FY Performance tab
+  var pipeline = checkPipeline();
+  var fyPipelineEl = document.getElementById('fy-pipeline-alert');
+  if(fyPipelineEl){
+    if(pipeline.triggered){
+      fyPipelineEl.innerHTML='<div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:12px 16px;margin-bottom:14px;"><div style="font-size:12px;font-weight:700;color:#ef4444;margin-bottom:4px;">⚠ Pipeline Issue — Revenue Gap</div><div style="font-size:11px;color:#fca5a5;line-height:1.6;">'+pipeline.months+' combined projected income is under $100,000. Your pipeline needs attention. Book more work now before this becomes a cashflow problem.</div></div>';
+    } else {
+      fyPipelineEl.innerHTML='<div style="background:rgba(204,244,146,.06);border:1px solid rgba(204,244,146,.2);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:11px;color:#ccf492;">✓ Pipeline looks healthy — no revenue gaps detected in the next 12 months.</div>';
+    }
+  }
+
+  var fyGroups={};
+  var fyOrder=[];
+  MONTHLY.forEach(function(m){
+    var parts=m.label.split(' ');
+    var mo=parts[0];
+    var yr=parseInt(parts[1]);
+    var fyYear=['Jul','Aug','Sep','Oct','Nov','Dec'].indexOf(mo)>=0?yr+1:yr;
+    var fyKey='FY'+fyYear;
+    if(!fyGroups[fyKey]){fyGroups[fyKey]=[];fyOrder.push(fyKey);}
+    fyGroups[fyKey].push(m);
+  });
+
+  var html='';
+  fyOrder.forEach(function(fy){
+    var months=fyGroups[fy];
+    var fyYr=parseInt(fy.replace('FY',''));
+    var isFuture=fyYr>2026;
+    var fyLabel=fy+' (1 Jul '+(fyYr-1)+' – 30 Jun '+fyYr+')';
+    if(isFuture) fyLabel+=' — Forward Projection';
+    else fyLabel+=' — Current Financial Year';
+
+    var sectionStyle=isFuture?'margin-bottom:28px;border:1px solid rgba(245,158,11,.2);border-radius:10px;padding:14px;background:rgba(245,158,11,.02);':'margin-bottom:28px;';
+    var headerColor=isFuture?'#f59e0b':'#d0dbd6';
+    var borderColor=isFuture?'rgba(245,158,11,.3)':'rgba(49,81,80,.3)';
+
+    html+='<div style="'+sectionStyle+'">';
+    html+='<div style="font-size:10px;font-weight:700;color:'+headerColor+';letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid '+borderColor+';">'+fyLabel+'</div>';
+
+    function renderRow(rowMonths,rowLabel,triggeredLabels){
+      if(!rowMonths||rowMonths.length===0) return '';
+      var r='<div style="font-size:8px;color:#315150;letter-spacing:2px;text-transform:uppercase;font-weight:700;margin-bottom:6px;">'+rowLabel+'</div>';
+      r+='<table style="width:100%;border-collapse:separate;border-spacing:5px 0;table-layout:fixed;margin-bottom:10px;"><tr>';
+      rowMonths.forEach(function(m){
+        var isPos=m.net>=0;
+        var isTight=m.net<0&&m.net>-20000;
+        var isNeg=m.net<=-20000;
+        var nc=isPos?'#ccf492':isTight?'#f59e0b':'#ef4444';
+        var bc=isNeg?'rgba(239,68,68,.4)':isTight?'rgba(245,158,11,.3)':'rgba(49,81,80,.4)';
+        var bg=isNeg?'rgba(239,68,68,.03)':'#191919';
+        r+='<td style="vertical-align:top;padding:0;">';
+        var isPipeline = triggeredLabels && triggeredLabels[m.label];
+        var pulseClass = isPipeline ? ' pipeline-pulse' : '';
+        r+='<div class="'+pulseClass+'" style="background:'+bg+';border:1px solid '+bc+';border-radius:8px;padding:10px;">';
+        r+='<div style="font-size:11px;font-weight:700;color:#fff;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+m.label+'</div>';
+        r+='<div style="padding-top:6px;border-top:1px solid rgba(49,81,80,.3);margin-bottom:6px;">';
+        r+='<div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px;"><span style="color:#d0dbd6;opacity:.6;">Cash In</span><span style="color:#3b82f6;font-weight:600;">'+fmt(m.in)+'</span></div>';
+        r+='<div style="display:flex;justify-content:space-between;font-size:10px;"><span style="color:#d0dbd6;opacity:.6;">Cash Out</span><span style="color:#f59e0b;font-weight:600;">'+fmt(m.out)+'</span></div>';
+        r+='</div>';
+        r+='<div style="padding-top:6px;border-top:1px solid rgba(49,81,80,.3);">';
+        r+='<div style="font-size:8px;color:#d0dbd6;opacity:.5;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Net Cash Movement</div>';
+        r+='<div style="font-size:14px;font-weight:800;color:'+nc+';">'+(isPos?'+':'-')+fmt(Math.abs(m.net))+'</div>';
+        r+='</div></div></td>';
+      });
+      r+='</tr></table>';
+      return r;
+    }
+
+    var pl=checkPipeline();
+    html+=renderRow(months.slice(0,6),'July – December',pl.triggeredLabels);
+    html+=renderRow(months.slice(6,12),'January – June',pl.triggeredLabels);
+    html+='</div>';
+  });
+
+  // Totals
+  var ti=MONTHLY.reduce(function(a,m){return a+m.in;},0);
+  var to=MONTHLY.reduce(function(a,m){return a+m.out;},0);
+  var tn=ti-to;
+  html+='<div class="card" style="display:flex;gap:20px;flex-wrap:wrap;">';
+  html+='<div><div style="font-size:9px;color:#d0dbd6;opacity:.5;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Projected Revenue</div><div style="font-size:20px;font-weight:800;color:#3b82f6;">'+fmt(ti)+'</div></div>';
+  html+='<div><div style="font-size:9px;color:#d0dbd6;opacity:.5;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Projected Total Out</div><div style="font-size:20px;font-weight:800;color:#f59e0b;">'+fmt(to)+'</div></div>';
+  html+='<div><div style="font-size:9px;color:#d0dbd6;opacity:.5;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Projected Net Position</div><div style="font-size:20px;font-weight:800;color:'+(tn>=0?'#ccf492':'#ef4444')+';">'+(tn>=0?'+':'')+fmt(tn)+'</div></div>';
+  html+='</div>';
+
+  document.getElementById('monthly-list').innerHTML=html;
+
+  // Build FY2026 monthly net in Jul-Jun order
+  var monthOrder=['Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar','Jun'];
+  var fy26Net=[];
+  var fy26Labels=[];
+  var fy26Groups={};
+  MONTHLY.forEach(function(m){
+    var parts=m.label.split(' ');
+    var mo=parts[0];
+    var yr=parseInt(parts[1]);
+    var fyYear=['Jul','Aug','Sep','Oct','Nov','Dec'].indexOf(mo)>=0?yr+1:yr;
+    if(fyYear===2026) fy26Groups[mo]=m.net;
+  });
+  var allMonths=['Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar','Apr','May','Jun'];
+  allMonths.forEach(function(m){ fy26Labels.push(m); fy26Net.push(fy26Groups[m]||0); });
+
+  // Destroy existing chart if any
+  var existingChart=Chart.getChart('fy-compare-chart');
+  if(existingChart) existingChart.destroy();
+
+  new Chart(document.getElementById('fy-compare-chart'),{
+    type:'line',
+    data:{
+      labels:fy26Labels,
+      datasets:[
+        {
+          label:'FY2026',
+          data:fy26Net,
+          borderColor:'#ccf492',
+          backgroundColor:'rgba(204,244,146,.08)',
+          fill:true,
+          tension:0.3,
+          pointBackgroundColor:fy26Net.map(function(v){return v>=0?'#ccf492':'#ef4444';}),
+          pointRadius:4,
+          borderWidth:2
+        },
+        {
+          label:'FY2025',
+          data:FY25_NET,
+          borderColor:'#315150',
+          backgroundColor:'rgba(49,81,80,.06)',
+          fill:true,
+          tension:0.3,
+          pointBackgroundColor:FY25_NET.map(function(v){return v>=0?'#315150':'#ef4444';}),
+          pointRadius:4,
+          borderWidth:2,
+          borderDash:[4,3]
+        }
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{labels:{color:'#d0dbd6',font:{size:10}}},
+        tooltip:{callbacks:{label:function(ctx){return ctx.dataset.label+': '+(ctx.raw>=0?'+':'-')+fmt(Math.abs(ctx.raw));}}}
+      },
+      scales:{
+        x:{grid:{color:'rgba(49,81,80,.2)'},ticks:{color:'#d0dbd6',font:{size:9}}},
+        y:{
+          grid:{color:'rgba(49,81,80,.2)'},
+          ticks:{color:'#d0dbd6',font:{size:9},callback:function(v){return (v>=0?'+':'-')+fmt(Math.abs(v));}},
+          afterDataLimits:function(scale){
+            scale.max=scale.max*1.1;
+            scale.min=scale.min<0?scale.min*1.1:scale.min;
+          }
+        }
+      }
+    }
+  });
+}
+
+
+function renderClients(){
+  // Sort — active clients (contracted ahead > 0) first by amount desc, then inactive alphabetically
+  var active = CLIENTS.filter(function(c){ return c.contracted_ahead > 0; }).sort(function(a,b){ return b.contracted_ahead - a.contracted_ahead; });
+  var inactive = CLIENTS.filter(function(c){ return c.contracted_ahead === 0; }).sort(function(a,b){ return a.name.localeCompare(b.name); });
+  var sorted = active.concat(inactive);
+  var maxTotal = sorted[0].total;
+  var html = '';
+  html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">';
+  
+  sorted.forEach(function(c){
+    var pct = Math.round(c.total / maxTotal * 100);
+    html += '<div style="background:#191919;border:1px solid rgba(49,81,80,.4);border-radius:8px;padding:12px;position:relative;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">';
+    html += '<div style="font-size:11px;font-weight:700;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;margin-right:6px;" title="'+c.name+'">'+c.name+'</div>';
+    if(c.lifetime > 0){
+      html += '<div style="flex-shrink:0;background:rgba(49,81,80,.4);border-radius:4px;padding:2px 6px;text-align:center;">';
+      html += '<div style="font-size:7px;color:#d0dbd6;opacity:.5;text-transform:uppercase;letter-spacing:1px;margin-bottom:1px;">Lifetime</div>';
+      html += '<div style="font-size:9px;font-weight:800;color:#d0dbd6;">$'+c.lifetime.toLocaleString()+'</div>';
+      html += '</div>';
+    }
+    html += '</div>';
+    html += '<div style="font-size:8px;color:#d0dbd6;opacity:.5;text-transform:uppercase;letter-spacing:1px;margin-bottom:2px;">Revenue FY2026</div>';
+    html += '<div style="font-size:16px;font-weight:800;color:#ccf492;margin-bottom:8px;">$'+c.total.toLocaleString()+'</div>';
+    html += '<div style="background:#233a39;border-radius:99px;height:4px;overflow:hidden;margin-bottom:10px;"><div style="width:'+pct+'%;height:100%;background:linear-gradient(90deg,#315150,#ccf492);border-radius:99px;"></div></div>';
+
+    html += '<div style="display:flex;justify-content:space-between;font-size:9px;margin-bottom:8px;">';
+    html += '<div><div style="color:#d0dbd6;opacity:.5;margin-bottom:2px;">Invoices</div><div style="color:#d0dbd6;font-weight:700;">'+c.invoices+'</div></div>';
+    html += '<div style="text-align:right;"><div style="color:#d0dbd6;opacity:.5;margin-bottom:2px;">Last Payment</div><div style="color:#d0dbd6;font-weight:700;">'+c.last_payment+'</div></div>';
+    html += '</div>';
+    if(c.contracted_ahead > 0){
+      html += '<div style="background:rgba(49,81,80,.3);border-radius:6px;padding:7px 10px;display:flex;justify-content:space-between;align-items:center;">';
+      html += '<div style="font-size:8px;color:#d0dbd6;opacity:.6;text-transform:uppercase;letter-spacing:1px;">Contracted Ahead</div>';
+      html += '<div style="font-size:11px;font-weight:800;color:#ccf492;">$'+c.contracted_ahead.toLocaleString()+'</div>';
+      html += '</div>';
+    }
+    html += '</div>';
+  });
+  
+  html += '</div>';
+  document.getElementById('client-list').innerHTML = html;
+}
+
+
+renderOverview();
+renderWeekly();
+renderClients();
+renderMonthly();
+</script>
+</div><!-- /dashboard-wrap -->
+
+<script>
+const SUPABASE_URL = 'https://abhmonhsiluraykelrpp.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_D5P8QA2r-4FWmm3TfPpZgA_y1NSlV1W';
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+function showSyncBadge(msg, color) {
+  const el = document.getElementById('sync-badge');
+  if (el) { el.textContent = msg; el.style.color = color || '#315150'; }
+}
+
+async function handleLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errEl = document.getElementById('login-error');
+  errEl.style.display = 'none';
+  document.getElementById('login-btn').textContent = 'Signing in...';
+
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+
+  if (error) {
+    errEl.style.display = 'block';
+    document.getElementById('login-btn').textContent = 'Sign In';
+    return;
+  }
+
+  await launchDashboard(email);
+}
+
+async function launchDashboard(email) {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('dashboard-wrap').style.display = 'block';
+  showSyncBadge('Loading your data...', '#f59e0b');
+
+  // Get this user's sheet_id from clients table
+  const { data: clientData, error: clientError } = await sb
+    .from('clients')
+    .select('sheet_id, full_name')
+    .eq('email', email)
+    .single();
+
+  // If RLS blocks the query or no sheet linked, use default Apps Script URL
+  const DEFAULT_SCRIPT = 'https://script.google.com/macros/s/AKfycbzOauv605mtvkd7PrUG7a1EjGlE9B9h-t0JUfmyAJ-ET-uxO_Kq4aclpJIw8cfi3q_L/exec';
+  
+  const sheetId = (clientData && clientData.sheet_id) ? clientData.sheet_id : DEFAULT_SCRIPT;
+  await fetchSheetData(sheetId);
+}
+
+async function fetchSheetData(sheetId) {
+  showSyncBadge('Syncing live data...', '#f59e0b');
+
+  // Use published CSV URL from Supabase clients table
+  // Build the Google Sheets CSV URL
+  let googleUrl;
+  if (sheetId.startsWith('https://')) {
+    googleUrl = sheetId.includes('?')
+      ? sheetId + '&output=csv&sheet=Business%20Working%20Account'
+      : sheetId + '?output=csv&sheet=Business%20Working%20Account';
+  } else {
+    googleUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTEgXoNhYXilNYCqd8SIvcwXpN_G4ozpr2VfPoouiUCdQQBILx91w3Ckp2_gkfxz6F21wmSUSDbwEcG/pub?output=csv&sheet=Business%20Working%20Account';
+  }
+
+  // Route through Netlify function to avoid CORS
+  const PUBLISHED_CSV = '/.netlify/functions/sheet?url=' + encodeURIComponent(googleUrl);
+
+  try {
+    const response = await fetch(PUBLISHED_CSV);
+    const rows = await response.json();
+
+    if (!rows || rows.length < 10) {
+      showSyncBadge('Using cached data', '#f59e0b');
+      renderOverview(); renderWeekly();
+      return;
+    }
+
+    // Row 6 = index 5 (dates), Row 8 = index 7 (opening)
+    // Row 65 = index 64 (sales), Row 76 = index 75 (total in), Row 98 = index 97 (total out)
+    const dateRow = rows[5] || [];
+    const openRow = rows[7] || [];
+    const salesRow = rows[64] || [];
+    const inRow = rows[75] || [];
+    const outRow = rows[97] || [];
+
+    if (!dateRow.length) {
+      showSyncBadge('Sheet format mismatch', '#ef4444');
+      renderOverview(); renderWeekly();
+      return;
+    }
+
+    // Find first date column - look for Date objects or date strings
+    let startCol = 3;
+    for (let i = 3; i < dateRow.length; i++) {
+      const v = dateRow[i];
+      if (v && (v instanceof Date || (typeof v === 'string' && v.includes('-')) || typeof v === 'number')) {
+        startCol = i; break;
+      }
+    }
+
+    const newWeekly = [];
+    const today = new Date();
+    let cwIdx = 0;
+
+    const parseNum = (val) => {
+      if (val === null || val === undefined || val === '') return 0;
+      if (typeof val === 'number') return val;
+      const cleaned = String(val).replace(/[$,]/g, '').trim();
+      return parseFloat(cleaned) || 0;
+    };
+
+    const parseDate = (val) => {
+      if (!val) return null;
+      if (val instanceof Date) return val;
+      if (typeof val === 'string') {
+        // Handle "Date(2026,5,18)" format from Apps Script
+        const m = String(val).match(/Date\((\d+),(\d+),(\d+)\)/);
+        if (m) return new Date(parseInt(m[1]), parseInt(m[2]), parseInt(m[3]));
+        // Handle ISO string
+        const d = new Date(val);
+        if (!isNaN(d)) return d;
+      }
+      if (typeof val === 'number') {
+        // Excel serial date
+        const d = new Date((val - 25569) * 86400 * 1000);
+        if (!isNaN(d)) return d;
+      }
+      return null;
+    };
+
+    for (let col = startCol; col < dateRow.length; col++) {
+      const dateVal = dateRow[col];
+      if (!dateVal) continue;
+
+      const dateObj = parseDate(dateVal);
+      if (!dateObj || isNaN(dateObj.getTime())) continue;
+
+      const opening = parseNum(openRow[col]);
+      const sales = parseNum(salesRow[col]);
+      const totalIn = parseNum(inRow[col]);
+      const totalOut = parseNum(outRow[col]);
+      const closing = opening + totalIn - totalOut;
+
+      const idx = newWeekly.length;
+      if (dateObj <= today) cwIdx = idx;
+
+      const dd = String(dateObj.getDate()).padStart(2,'0');
+      const mm = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][dateObj.getMonth()];
+      const yy = String(dateObj.getFullYear()).slice(2);
+
+      newWeekly.push({
+        idx, label: dd+' '+mm+' '+yy,
+        iso: dateObj.toISOString().split('T')[0],
+        opening, sales,
+        other_income: Math.max(0, totalIn - sales),
+        total_in: totalIn, supplier: 0,
+        total_out: totalOut, closing
+      });
+    }
+
+    if (newWeekly.length > 5) {
+      WEEKLY.length = 0;
+      newWeekly.forEach(w => WEEKLY.push(w));
+      viewIdx = cwIdx;
+      renderOverview();
+      renderWeekly();
+      showSyncBadge('✓ Live — ' + new Date().toLocaleTimeString(), '#ccf492');
+    } else {
+      showSyncBadge('Using cached data', '#f59e0b');
+      renderOverview(); renderWeekly();
+    }
+
+  } catch(err) {
+    console.error('Sheet fetch error:', err);
+    showSyncBadge('Using cached data', '#f59e0b');
+    renderOverview(); renderWeekly();
+  }
+}
+
+async function handleLogout() {
+  await sb.auth.signOut();
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('dashboard-wrap').style.display = 'none';
+  document.getElementById('login-email').value = '';
+  document.getElementById('login-password').value = '';
+  document.getElementById('login-btn').textContent = 'Sign In';
+}
+
+// Check existing session on load
+(async () => {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session && session.user) {
+    await launchDashboard(session.user.email);
+  }
+})();
+</script>
+
+</body>
+</html>
