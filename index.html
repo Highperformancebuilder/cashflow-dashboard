@@ -808,12 +808,15 @@ async function fetchSheetData(sheetId) {
       return;
     }
 
-    // Find first date column - look for Date objects or date strings
+    // Find first date column - look for date values
     let startCol = 3;
     for (let i = 3; i < dateRow.length; i++) {
       const v = dateRow[i];
-      if (v && (v instanceof Date || (typeof v === 'string' && v.includes('-')) || typeof v === 'number')) {
-        startCol = i; break;
+      if (v && v !== '' && v !== null) {
+        const d = parseDate(v);
+        if (d && !isNaN(d.getTime()) && d.getFullYear() > 2020) {
+          startCol = i; break;
+        }
       }
     }
 
@@ -831,18 +834,25 @@ async function fetchSheetData(sheetId) {
     const parseDate = (val) => {
       if (!val) return null;
       if (val instanceof Date) return val;
-      if (typeof val === 'string') {
-        // Handle "Date(2026,5,18)" format from Apps Script
-        const m = String(val).match(/Date\((\d+),(\d+),(\d+)\)/);
-        if (m) return new Date(parseInt(m[1]), parseInt(m[2]), parseInt(m[3]));
-        // Handle ISO string
-        const d = new Date(val);
-        if (!isNaN(d)) return d;
+      const s = String(val);
+      // Handle ISO timestamp: "2026-06-18T08:00:00.000Z"
+      if (s.includes('T') || s.includes('-')) {
+        const d = new Date(s);
+        if (!isNaN(d.getTime())) return d;
       }
-      if (typeof val === 'number') {
-        // Excel serial date
-        const d = new Date((val - 25569) * 86400 * 1000);
-        if (!isNaN(d)) return d;
+      // Handle "Date(2026,5,18)" format
+      const m = s.match(/Date\((\d+),(\d+),(\d+)\)/);
+      if (m) return new Date(parseInt(m[1]), parseInt(m[2]), parseInt(m[3]));
+      // Handle dd-Mon-yy
+      const p = s.split('-');
+      if (p.length === 3 && isNaN(p[0]) === false) {
+        const MONTHS = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+        const yr = parseInt(p[2]) < 100 ? 2000 + parseInt(p[2]) : parseInt(p[2]);
+        return new Date(yr, MONTHS[p[1]] ?? parseInt(p[1])-1, parseInt(p[0]));
+      }
+      // Handle Excel serial number
+      if (typeof val === 'number' && val > 40000) {
+        return new Date((val - 25569) * 86400 * 1000);
       }
       return null;
     };
