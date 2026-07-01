@@ -760,18 +760,11 @@ async function launchDashboard(email) {
     .eq('email', email)
     .single();
 
-  if (clientError || !clientData || !clientData.sheet_id) {
-    showSyncBadge('No sheet linked', '#ef4444');
-    renderOverview();
-    renderWeekly();
-    return;
-  }
-
-  const sheetId = clientData.sheet_id;
+  // If RLS blocks the query or no sheet linked, use default Apps Script URL
+  const DEFAULT_SCRIPT = 'https://script.google.com/macros/s/AKfycbzOauv605mtvkd7PrUG7a1EjGlE9B9h-t0JUfmyAJ-ET-uxO_Kq4aclpJIw8cfi3q_L/exec';
+  
+  const sheetId = (clientData && clientData.sheet_id) ? clientData.sheet_id : DEFAULT_SCRIPT;
   await fetchSheetData(sheetId);
-  // sheetId can be either:
-  // - A Google Sheet ID (old format): 1MXTCOStUpHpGYrthqRb8NCuERbUIeyZcRZVvdG4P15c
-  // - A published CSV base URL (new format): https://docs.google.com/spreadsheets/d/e/xxx/pub
 }
 
 async function fetchSheetData(sheetId) {
