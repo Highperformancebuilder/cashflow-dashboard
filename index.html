@@ -7,93 +7,21 @@
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
 <style>
-#login-screen {
-  position: fixed;
-  inset: 0;
-  background: #000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-  font-family: 'Manrope', sans-serif;
-}
-#login-box {
-  background: #191919;
-  border: 1px solid #315150;
-  border-radius: 12px;
-  padding: 48px 40px;
-  width: 100%;
-  max-width: 400px;
-  text-align: center;
-}
-#login-box .login-label {
-  font-size: 9px;
-  letter-spacing: 4px;
-  text-transform: uppercase;
-  color: #315150;
-  font-weight: 600;
-  margin-bottom: 8px;
-}
-#login-box h2 {
-  font-size: 20px;
-  font-weight: 800;
-  color: #fff;
-  text-transform: uppercase;
-  letter-spacing: 2px;
-  margin-bottom: 32px;
-}
-#login-box input {
-  width: 100%;
-  background: #000;
-  border: 1px solid #315150;
-  border-radius: 6px;
-  padding: 12px 16px;
-  color: #d0dbd6;
-  font-family: 'Manrope', sans-serif;
-  font-size: 14px;
-  margin-bottom: 12px;
-  outline: none;
-}
-#login-box input:focus {
-  border-color: #ccf492;
-}
-#login-btn {
-  width: 100%;
-  background: #ccf492;
-  border: none;
-  border-radius: 6px;
-  padding: 13px;
-  color: #000;
-  font-family: 'Manrope', sans-serif;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  cursor: pointer;
-  margin-top: 8px;
-}
-#login-btn:hover { background: #b8e07a; }
-#login-error {
-  color: #ef4444;
-  font-size: 12px;
-  margin-top: 12px;
-  display: none;
-}
-#logout-btn {
-  background: none;
-  border: 1px solid #315150;
-  color: #d0dbd6;
-  border-radius: 5px;
-  padding: 6px 14px;
-  font-size: 9px;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  cursor: pointer;
-  font-family: 'Manrope', sans-serif;
-}
-#logout-btn:hover { border-color: #ccf492; color: #ccf492; }
-#dashboard-wrap { display: none; }
+#login-screen{position:fixed;inset:0;background:#000;display:flex;align-items:center;justify-content:center;z-index:9999;font-family:'Manrope',sans-serif;}
+#login-box{background:#191919;border:1px solid #315150;border-radius:12px;padding:48px 40px;width:100%;max-width:400px;text-align:center;}
+.login-label{font-size:9px;letter-spacing:4px;text-transform:uppercase;color:#315150;font-weight:600;margin-bottom:8px;}
+.login-title{font-size:20px;font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:2px;margin-bottom:32px;}
+#login-email,#login-password{width:100%;background:#000;border:1px solid #315150;border-radius:6px;padding:12px 16px;color:#d0dbd6;font-family:'Manrope',sans-serif;font-size:14px;margin-bottom:12px;outline:none;box-sizing:border-box;}
+#login-email:focus,#login-password:focus{border-color:#ccf492;}
+#login-btn{width:100%;background:#ccf492;border:none;border-radius:6px;padding:13px;color:#000;font-family:'Manrope',sans-serif;font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;cursor:pointer;margin-top:8px;}
+#login-btn:hover{background:#b8e07a;}
+#login-error{color:#ef4444;font-size:12px;margin-top:12px;display:none;}
+#logout-btn{background:none;border:1px solid #315150;color:#d0dbd6;border-radius:5px;padding:6px 14px;font-size:9px;letter-spacing:1px;text-transform:uppercase;cursor:pointer;font-family:'Manrope',sans-serif;}
+#logout-btn:hover{border-color:#ccf492;color:#ccf492;}
+#dashboard-wrap{display:none;}
+#sync-badge{font-size:8px;letter-spacing:1px;color:#315150;text-transform:uppercase;padding:4px 8px;}
 </style>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -161,29 +89,25 @@ tr:hover td{background:rgba(49,81,80,.08)}
 </head>
 <body>
 
-<!-- LOGIN SCREEN -->
 <div id="login-screen">
   <div id="login-box">
     <div class="login-label">High Performance Builder</div>
-    <h2>Client Portal</h2>
+    <div class="login-title">Client Portal</div>
     <input type="email" id="login-email" placeholder="Email address" />
-    <input type="password" id="login-password" placeholder="Password" />
+    <input type="password" id="login-password" placeholder="Password" onkeydown="if(event.key==='Enter')handleLogin()" />
     <button id="login-btn" onclick="handleLogin()">Sign In</button>
     <div id="login-error">Invalid email or password. Please try again.</div>
   </div>
 </div>
-
-<!-- DASHBOARD WRAP -->
 <div id="dashboard-wrap">
-
 <div class="hdr">
   <div style="display:flex;align-items:center;gap:12px">
     <svg width="26" height="27" viewBox="0 0 206.33 212.6"><path fill="#ccf492" d="M8.84,98.81v27.09l80.78-39.1v33.07c0,10.65-6.09,20.37-15.68,25.01l-38.01,18.4v-26.43l-27.09,12.78v53.86l94.33-45.66,94.33,45.66v-53.88l-27.09-12.78v26.45l-38.01-18.4c-9.59-4.64-15.68-14.35-15.68-25.01v-33.07l80.78,39.1v-27.09l-94.33-45.66L8.84,98.81Z"/><polygon fill="#ccf492" points="103.17 9.11 8.84 54.77 8.84 81.86 103.17 36.2 197.49 81.86 197.49 54.77 103.17 9.11"/></svg>
     <div><div class="htop">Greg Jones</div><div class="htitle">Cashflow FY2026</div></div>
   </div>
-  <div style="display:flex;gap:8px;align-items:center">
+  <div style="display:flex;gap:8px;align-items:center"><button id="logout-btn" onclick="handleLogout()">Sign Out</button>
     <div class="badge" id="risk-badge" style="display:none;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:#ef4444">⚠ Cash Risk</div>
-    <div class="badge" style="background:rgba(204,244,146,.08);border:1px solid rgba(204,244,146,.3);color:#ccf492">FY2026</div>
+    <span id="sync-badge"></span><div class="badge" style="background:rgba(204,244,146,.08);border:1px solid rgba(204,244,146,.3);color:#ccf492">FY2026</div>
   </div>
 </div>
 <div class="nav">
@@ -793,7 +717,7 @@ renderWeekly();
 renderClients();
 renderMonthly();
 </script>
-</div><!-- end dashboard-wrap -->
+</div><!-- /dashboard-wrap -->
 
 <script>
 const SUPABASE_URL = 'https://abhmonhsiluraykelrpp.supabase.co';
@@ -801,21 +725,157 @@ const SUPABASE_KEY = 'sb_publishable_D5P8QA2r-4FWmm3TfPpZgA_y1NSlV1W';
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+function showSyncBadge(msg, color) {
+  const el = document.getElementById('sync-badge');
+  if (el) { el.textContent = msg; el.style.color = color || '#315150'; }
+}
+
 async function handleLogin() {
-  const email = document.getElementById('login-email').value;
+  const email = document.getElementById('login-email').value.trim();
   const password = document.getElementById('login-password').value;
   const errEl = document.getElementById('login-error');
   errEl.style.display = 'none';
+  document.getElementById('login-btn').textContent = 'Signing in...';
 
   const { data, error } = await sb.auth.signInWithPassword({ email, password });
 
   if (error) {
     errEl.style.display = 'block';
+    document.getElementById('login-btn').textContent = 'Sign In';
     return;
   }
 
+  await launchDashboard(email);
+}
+
+async function launchDashboard(email) {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('dashboard-wrap').style.display = 'block';
+  showSyncBadge('Loading your data...', '#f59e0b');
+
+  // Get this user's sheet_id from clients table
+  const { data: clientData, error: clientError } = await sb
+    .from('clients')
+    .select('sheet_id, full_name')
+    .eq('email', email)
+    .single();
+
+  if (clientError || !clientData || !clientData.sheet_id) {
+    showSyncBadge('No sheet linked', '#ef4444');
+    renderOverview();
+    renderWeekly();
+    return;
+  }
+
+  const sheetId = clientData.sheet_id;
+  await fetchSheetData(sheetId);
+}
+
+async function fetchSheetData(sheetId) {
+  showSyncBadge('Syncing live data...', '#f59e0b');
+
+  const sheetName = encodeURIComponent('Business Working Account');
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${sheetName}`;
+
+  try {
+    const response = await fetch(url);
+    const text = await response.text();
+    const jsonStr = text.replace(/^[^{]*/,'').replace(/[^}]*$/,'');
+    const data = JSON.parse(jsonStr);
+
+    if (!data.table || !data.table.rows || data.table.rows.length < 10) {
+      showSyncBadge('Using cached data', '#f59e0b');
+      renderOverview(); renderWeekly();
+      return;
+    }
+
+    const rows = data.table.rows;
+
+    // Row indices (0-based): 5=dates, 7=opening, 64=sales, 75=total_in, 97=total_out
+    const dateRow = rows[5];
+    const openRow = rows[7];
+    const salesRow = rows[64];
+    const inRow = rows[75];
+    const outRow = rows[97];
+
+    if (!dateRow || !openRow) {
+      showSyncBadge('Sheet format mismatch', '#ef4444');
+      renderOverview(); renderWeekly();
+      return;
+    }
+
+    // Find first date column
+    let startCol = 3;
+    for (let i = 3; i < (dateRow.c || []).length; i++) {
+      if (dateRow.c[i] && (dateRow.c[i].v || dateRow.c[i].f)) { startCol = i; break; }
+    }
+
+    const newWeekly = [];
+    const today = new Date();
+    let cwIdx = 0;
+
+    for (let col = startCol; col < (dateRow.c || []).length; col++) {
+      const dc = dateRow.c[col];
+      if (!dc || (!dc.v && !dc.f)) continue;
+
+      const getVal = (row) => {
+        if (!row || !row.c || !row.c[col]) return 0;
+        const v = row.c[col].v;
+        return v ? parseFloat(v) || 0 : 0;
+      };
+
+      const opening = getVal(openRow);
+      const sales = getVal(salesRow);
+      const totalIn = getVal(inRow);
+      const totalOut = getVal(outRow);
+      const closing = opening + totalIn - totalOut;
+
+      // Parse date from label
+      let dateObj = null;
+      const label = dc.f || dc.v || '';
+      if (typeof label === 'string') {
+        const p = label.split('-');
+        if (p.length === 3) {
+          const months = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+          dateObj = new Date(parseInt(p[2]), months[p[1]] || 0, parseInt(p[0]));
+        }
+      }
+      if (!dateObj || isNaN(dateObj)) dateObj = new Date(today);
+
+      const idx = newWeekly.length;
+      if (dateObj <= today) cwIdx = idx;
+
+      const dd = String(dateObj.getDate()).padStart(2,'0');
+      const mm = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][dateObj.getMonth()];
+      const yy = String(dateObj.getFullYear()).slice(2);
+
+      newWeekly.push({
+        idx, label: dd+' '+mm+' '+yy,
+        iso: dateObj.toISOString().split('T')[0],
+        opening, sales,
+        other_income: Math.max(0, totalIn - sales),
+        total_in: totalIn, supplier: 0,
+        total_out: totalOut, closing
+      });
+    }
+
+    if (newWeekly.length > 5) {
+      WEEKLY.length = 0;
+      newWeekly.forEach(w => WEEKLY.push(w));
+      viewIdx = cwIdx;
+      renderOverview();
+      renderWeekly();
+      showSyncBadge('✓ Live — ' + new Date().toLocaleTimeString(), '#ccf492');
+    } else {
+      showSyncBadge('Using cached data', '#f59e0b');
+      renderOverview(); renderWeekly();
+    }
+
+  } catch(err) {
+    console.error('Sheet error:', err);
+    showSyncBadge('Using cached data', '#f59e0b');
+    renderOverview(); renderWeekly();
+  }
 }
 
 async function handleLogout() {
@@ -824,14 +884,14 @@ async function handleLogout() {
   document.getElementById('dashboard-wrap').style.display = 'none';
   document.getElementById('login-email').value = '';
   document.getElementById('login-password').value = '';
+  document.getElementById('login-btn').textContent = 'Sign In';
 }
 
-// Check if already logged in
+// Check existing session on load
 (async () => {
   const { data: { session } } = await sb.auth.getSession();
-  if (session) {
-    document.getElementById('login-screen').style.display = 'none';
-    document.getElementById('dashboard-wrap').style.display = 'block';
+  if (session && session.user) {
+    await launchDashboard(session.user.email);
   }
 })();
 </script>
