@@ -1,0 +1,15 @@
+# Static site: index.html is served straight from the repo root, with the
+# Google Sheets proxy running as a serverless function alongside it.
+
+[build]
+  publish = "."
+  functions = "netlify/functions"
+  command = "echo 'Static site — no build step required.'"
+
+[functions]
+  node_bundler = "esbuild"
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache, must-revalidate"

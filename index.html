@@ -118,6 +118,7 @@ tr:hover td{background:rgba(49,81,80,.08)}
   <button class="nb" onclick="showTab('accounts',this)">4 Accounts</button>
 </div>
 <div class="content">
+<div id="sync-banner"></div>
 
 <!-- OVERVIEW -->
 <div id="tab-overview" class="tab active">
@@ -192,94 +193,9 @@ tr:hover td{background:rgba(49,81,80,.08)}
   <span class="lbl">Four Account System</span>
   <div class="good">Your four account structure separates operating cash, tax obligations, savings, and profit reinvestment. Each account has a specific purpose. Never mix them.</div>
 
-  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px;">
-
-    <!-- Working Account -->
-    <div class="card clime" style="margin:0;">
-      <div style="font-size:11px;font-weight:700;color:#ccf492;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Working Account</div>
-      <div style="font-size:10px;color:#d0dbd6;opacity:.6;margin-bottom:10px;">Day to day operations</div>
-      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;">
-        <span style="color:#d0dbd6;opacity:.5;">Opening</span>
-        <span style="color:#ccf492;font-weight:800;font-size:15px;">$19,655</span>
-      </div>
-      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:10px;">
-        <span style="color:#d0dbd6;opacity:.5;">Closing</span>
-        <span style="color:#ccf492;font-weight:800;font-size:15px;" id="wa-bal">$51,234</span>
-      </div>
-      <div style="padding-top:8px;border-top:1px solid rgba(49,81,80,.3);">
-        <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px;"><span style="color:#d0dbd6;opacity:.6;">This week in</span><span style="color:#3b82f6;font-weight:600;">$48,074</span></div>
-        <div style="display:flex;justify-content:space-between;font-size:11px;"><span style="color:#d0dbd6;opacity:.6;">This week out</span><span style="color:#f59e0b;font-weight:600;">$22,887</span></div>
-      </div>
-    </div>
-
-    <!-- Regulation Account -->
-    <div class="card" style="margin:0;border-color:rgba(59,130,246,.3);">
-      <div style="font-size:11px;font-weight:700;color:#3b82f6;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Regulation Account</div>
-      <div style="font-size:10px;color:#d0dbd6;opacity:.6;margin-bottom:10px;">Tax obligations only</div>
-      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;">
-        <span style="color:#d0dbd6;opacity:.5;">Opening</span>
-        <span style="color:#3b82f6;font-weight:800;font-size:15px;">$7,059</span>
-      </div>
-      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:10px;">
-        <span style="color:#d0dbd6;opacity:.5;">Closing</span>
-        <span style="color:#3b82f6;font-weight:800;font-size:15px;">$7,059</span>
-      </div>
-      <div style="padding-top:8px;border-top:1px solid rgba(49,81,80,.3);">
-        <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px;"><span style="color:#d0dbd6;opacity:.6;">Super</span><span style="color:#3b82f6;">$1,044/wk</span></div>
-        <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px;"><span style="color:#d0dbd6;opacity:.6;">PAYG</span><span style="color:#3b82f6;">$2,000/wk</span></div>
-        <div style="display:flex;justify-content:space-between;font-size:11px;"><span style="color:#d0dbd6;opacity:.6;">BAS</span><span style="color:#3b82f6;">$1,456/wk</span></div>
-      </div>
-    </div>
-
-    <!-- Savings Account -->
-    <div class="card" style="margin:0;border-color:rgba(245,158,11,.3);">
-      <div style="font-size:11px;font-weight:700;color:#f59e0b;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Savings Account</div>
-      <div style="font-size:10px;color:#d0dbd6;opacity:.6;margin-bottom:10px;">$1,000 per week. Never touch.</div>
-      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;">
-        <span style="color:#d0dbd6;opacity:.5;">Opening</span>
-        <span style="color:#f59e0b;font-weight:800;font-size:15px;">$49,000</span>
-      </div>
-      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:10px;">
-        <span style="color:#d0dbd6;opacity:.5;">Closing</span>
-        <span style="color:#f59e0b;font-weight:800;font-size:15px;">$50,000</span>
-      </div>
-      <div style="padding-top:8px;border-top:1px solid rgba(49,81,80,.3);">
-        <div style="font-size:8px;color:#d0dbd6;opacity:.5;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Projected — In 12 Months</div>
-        <div style="font-size:22px;font-weight:800;color:#f59e0b;">$102,000</div>
-      </div>
-    </div>
-
-    <!-- Profit Reinvestment -->
-    <div class="card" style="margin:0;border-color:rgba(139,92,246,.3);">
-      <div style="font-size:11px;font-weight:700;color:#8b5cf6;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Profit Reinvestment</div>
-      <div style="font-size:10px;color:#d0dbd6;opacity:.6;margin-bottom:10px;">Future capex. Growth.</div>
-      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;">
-        <span style="color:#d0dbd6;opacity:.5;">Opening</span>
-        <span style="color:#8b5cf6;font-weight:800;font-size:15px;">$0</span>
-      </div>
-      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:10px;">
-        <span style="color:#d0dbd6;opacity:.5;">Closing</span>
-        <span style="color:#8b5cf6;font-weight:800;font-size:15px;">$0</span>
-      </div>
-      <div style="padding-top:8px;border-top:1px solid rgba(49,81,80,.3);">
-        <div style="font-size:8px;color:#d0dbd6;opacity:.5;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Projected — In 12 Months</div>
-        <div style="font-size:22px;font-weight:800;color:#8b5cf6;">$0</div>
-        <div style="font-size:9px;color:#8b5cf6;opacity:.7;margin-top:3px;">Ready when you are.</div>
-      </div>
-    </div>
-
-  </div>
-
-  <!-- Total across all accounts -->
-  <div class="card card-lime" style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;">
-    <div>
-      <div style="font-size:9px;color:#d0dbd6;opacity:.6;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Total Across All Accounts</div>
-      <div style="font-size:26px;font-weight:800;color:#ccf492;">$108,293</div>
-    </div>
-    <div style="font-size:9px;color:#d0dbd6;opacity:.5;text-align:right;line-height:1.8;">
-      Working $51,234<br>Regulation $7,059<br>Savings $50,000<br>Profit $0
-    </div>
-  </div>
+  <!-- Rendered by renderAccounts() from the live snapshot. -->
+  <div id="accounts-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px;"></div>
+  <div id="accounts-total"></div>
 
   <span class="lbl">Finance Obligations</span>
   <div style="display:flex;flex-direction:column;gap:6px;">
@@ -306,11 +222,34 @@ const WEEKLY=[{"idx": 0, "label": "03 Jul 25", "iso": "2025-07-03", "opening": -
 const MONTHLY=[{"label": "Jul 2025", "in": 107331, "out": 98392, "net": 8939}, {"label": "Aug 2025", "in": 124822, "out": 119182, "net": 5640}, {"label": "Sep 2025", "in": 34150, "out": 94184, "net": -60034}, {"label": "Oct 2025", "in": 107468, "out": 106087, "net": 1380}, {"label": "Nov 2025", "in": 159973, "out": 105249, "net": 54724}, {"label": "Dec 2025", "in": 133578, "out": 122405, "net": 11173}, {"label": "Jan 2026", "in": 99466, "out": 149517, "net": -50051}, {"label": "Feb 2026", "in": 132152, "out": 119606, "net": 12547}, {"label": "Mar 2026", "in": 96243, "out": 110029, "net": -13785}, {"label": "Apr 2026", "in": 192836, "out": 125209, "net": 67627}, {"label": "May 2026", "in": 148615, "out": 140565, "net": 8050}, {"label": "Jun 2026", "in": 211306, "out": 113229, "net": 98077}, {"label": "Jul 2026", "in": 304311, "out": 116490, "net": 187821}, {"label": "Aug 2026", "in": 182010, "out": 123399, "net": 58611}, {"label": "Sep 2026", "in": 0, "out": 60088, "net": -60088}, {"label": "Oct 2026", "in": 0, "out": 82056, "net": -82056}, {"label": "Nov 2026", "in": 0, "out": 57013, "net": -57013}, {"label": "Dec 2026", "in": 0, "out": 73456, "net": -73456}, {"label": "Jan 2027", "in": 0, "out": 65261, "net": -65261}];
 const YTD={"in": 1397572, "out": 1349027, "sales": 1290269};
 const FY={"fy24": 1366847, "fy25": 1778875};
-const CW_IDX=50;
+let CW_IDX=50;
 
 const fmt=n=>'$'+Math.abs(Math.round(n)).toLocaleString();
 const fmtK=n=>{const s=n<0?'-':'';return s+'$'+Math.abs(Math.round(n)).toLocaleString()};
 let wf='ahead',expW=null,moChart=null,viewIdx=CW_IDX;
+
+// Chart.js refuses to bind a canvas that already hosts a chart, so every
+// re-render must tear the old instance down first.
+function destroyChart(id){
+  if(typeof Chart==='undefined'||!Chart.getChart) return;
+  const existing=Chart.getChart(id);
+  if(existing) existing.destroy();
+}
+
+// Chart.js is loaded from a CDN. If it is slow, blocked or the canvas is
+// missing, draw nothing rather than throwing and stranding the rest of the
+// render — the figures matter more than the graphs.
+function makeChart(id,config){
+  const el=document.getElementById(id);
+  if(!el) return null;
+  if(typeof Chart==='undefined'){
+    el.parentElement.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:10px;color:#315150;letter-spacing:1px;text-transform:uppercase;">Chart unavailable — offline</div>';
+    return null;
+  }
+  destroyChart(id);
+  try{ return new Chart(el,config); }
+  catch(err){ console.error('[chart] '+id+' failed to render',err); return null; }
+}
 
 function showTab(n,b){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
@@ -367,7 +306,6 @@ function renderOverview(){
   document.getElementById('ytd-sales').textContent=fmtK(YTD.sales);
   document.getElementById('ytd-in').textContent=fmtK(YTD.in);
   document.getElementById('ytd-out').textContent=fmtK(YTD.out);
-  var waBal=document.getElementById('wa-bal'); if(waBal) waBal.textContent=fmtK(cl);
   document.getElementById('fy24v').textContent=fmt(FY.fy24);
   document.getElementById('fy25v').textContent=fmt(FY.fy25);
   document.getElementById('fy26v').textContent=fmt(YTD.sales)+' YTD';
@@ -398,10 +336,10 @@ function renderOverview(){
     }
   }
 
-  new Chart(document.getElementById('fy-chart'),{type:'bar',data:{labels:['FY2024\n(Jul 23–Jun 24)','FY2025\n(Jul 24–Jun 25)','FY2026 YTD\n(Jul 25–Jun 26)'],datasets:[{data:[FY.fy24,FY.fy25,YTD.sales],backgroundColor:['rgba(71,85,105,.6)','rgba(49,81,80,.8)','rgba(204,244,146,.8)'],borderColor:['#475569','#315150','#ccf492'],borderWidth:1,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>fmtK(ctx.raw)}}},scales:{x:{grid:{color:'rgba(49,81,80,.2)'},ticks:{color:'#d0dbd6',font:{size:10}}},y:{grid:{color:'rgba(49,81,80,.2)'},ticks:{color:'#d0dbd6',font:{size:9},callback:v=>fmtK(v)}}}}});
+  makeChart('fy-chart',{type:'bar',data:{labels:['FY2024\n(Jul 23–Jun 24)','FY2025\n(Jul 24–Jun 25)','FY2026 YTD\n(Jul 25–Jun 26)'],datasets:[{data:[FY.fy24,FY.fy25,YTD.sales],backgroundColor:['rgba(71,85,105,.6)','rgba(49,81,80,.8)','rgba(204,244,146,.8)'],borderColor:['#475569','#315150','#ccf492'],borderWidth:1,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>fmtK(ctx.raw)}}},scales:{x:{grid:{color:'rgba(49,81,80,.2)'},ticks:{color:'#d0dbd6',font:{size:10}}},y:{grid:{color:'rgba(49,81,80,.2)'},ticks:{color:'#d0dbd6',font:{size:9},callback:v=>fmtK(v)}}}}});
 
   const n12=WEEKLY.slice(viewIdx,viewIdx+12);
-  new Chart(document.getElementById('bal-chart'),{type:'line',data:{labels:n12.map(w=>w.label.slice(0,6)),datasets:[{label:'Closing',data:n12.map(w=>w.closing),borderColor:'#ccf492',backgroundColor:'rgba(204,244,146,.08)',fill:true,tension:0.3,pointBackgroundColor:n12.map(w=>w.closing<0?'#ef4444':w.closing<5000?'#f59e0b':'#ccf492'),pointRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>fmt(ctx.raw)}}},scales:{x:{grid:{color:'rgba(49,81,80,.2)'},ticks:{color:'#d0dbd6',font:{size:9}}},y:{grid:{color:'rgba(49,81,80,.2)'},ticks:{color:'#d0dbd6',font:{size:9},callback:v=>fmtK(v)}}}}});
+  makeChart('bal-chart',{type:'line',data:{labels:n12.map(w=>w.label.slice(0,6)),datasets:[{label:'Closing',data:n12.map(w=>w.closing),borderColor:'#ccf492',backgroundColor:'rgba(204,244,146,.08)',fill:true,tension:0.3,pointBackgroundColor:n12.map(w=>w.closing<0?'#ef4444':w.closing<5000?'#f59e0b':'#ccf492'),pointRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>fmt(ctx.raw)}}},scales:{x:{grid:{color:'rgba(49,81,80,.2)'},ticks:{color:'#d0dbd6',font:{size:9}}},y:{grid:{color:'rgba(49,81,80,.2)'},ticks:{color:'#d0dbd6',font:{size:9},callback:v=>fmtK(v)}}}}});
 
   const tight=WEEKLY.slice(viewIdx,viewIdx+26).filter(w=>w.closing<5000);
   const tw=document.getElementById('tight-weeks');
@@ -599,7 +537,6 @@ function renderMonthly(){
   document.getElementById('monthly-list').innerHTML=html;
 
   // Build FY2026 monthly net in Jul-Jun order
-  var monthOrder=['Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar','Jun'];
   var fy26Net=[];
   var fy26Labels=[];
   var fy26Groups={};
@@ -613,11 +550,7 @@ function renderMonthly(){
   var allMonths=['Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar','Apr','May','Jun'];
   allMonths.forEach(function(m){ fy26Labels.push(m); fy26Net.push(fy26Groups[m]||0); });
 
-  // Destroy existing chart if any
-  var existingChart=Chart.getChart('fy-compare-chart');
-  if(existingChart) existingChart.destroy();
-
-  new Chart(document.getElementById('fy-compare-chart'),{
+  makeChart('fy-compare-chart',{
     type:'line',
     data:{
       labels:fy26Labels,
@@ -720,206 +653,645 @@ renderMonthly();
 </div><!-- /dashboard-wrap -->
 
 <script>
+/* ==========================================================================
+   Live data layer — authentication, Google Sheets sync, realtime updates.
+
+   Google Sheets cannot push to a browser, so "realtime" is delivered as:
+
+     sheet edit -> Apps Script onChange -> Supabase sheet_snapshots row
+                -> Supabase Realtime websocket -> applySnapshot() -> re-render
+
+   A polling fallback covers the case where the Apps Script trigger is not
+   installed, or the websocket drops. See README.md for the setup steps.
+   ========================================================================== */
+
 const SUPABASE_URL = 'https://abhmonhsiluraykelrpp.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_D5P8QA2r-4FWmm3TfPpZgA_y1NSlV1W';
-const { createClient } = supabase;
-const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-function showSyncBadge(msg, color) {
-  const el = document.getElementById('sync-badge');
-  if (el) { el.textContent = msg; el.style.color = color || '#315150'; }
+const SHEET_PROXY      = '/.netlify/functions/sheet';
+const SNAPSHOT_TABLE   = 'sheet_snapshots';
+const POLL_INTERVAL_MS = 60000;
+const SNAPSHOT_VERSION = 1;
+
+// The Supabase SDK is a CDN script. If it did not load, fail loudly on the
+// login screen rather than throwing here — a bare `supabase.createClient`
+// would abort this whole block, leaving every function below undefined and
+// the page silently dead.
+const sb = (typeof supabase !== 'undefined' && supabase.createClient)
+  ? supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
+  : null;
+
+if (!sb) {
+  document.addEventListener('DOMContentLoaded', function () {
+    const err = document.getElementById('login-error');
+    const btn = document.getElementById('login-btn');
+    if (err) {
+      err.textContent = 'Sign-in is unavailable — could not reach the authentication service. Check your connection and reload.';
+      err.style.display = 'block';
+    }
+    if (btn) btn.disabled = true;
+  });
 }
 
+const sync = {
+  email: null,
+  sheetId: null,
+  scriptUrl: null,
+  channel: null,
+  pollTimer: null,
+  mode: 'idle',          // idle | realtime | polling | cached | error
+  lastUpdated: null,
+  inFlight: false
+};
+
+/* --------------------------------------------------------------------------
+   Status reporting — a badge in the header plus a banner for real problems,
+   so a failed sync is never silent.
+   -------------------------------------------------------------------------- */
+
+const STATUS_STYLES = {
+  realtime: { color: '#ccf492', dot: '●' },
+  polling:  { color: '#f59e0b', dot: '◐' },
+  cached:   { color: '#f59e0b', dot: '○' },
+  error:    { color: '#ef4444', dot: '⚠' },
+  loading:  { color: '#f59e0b', dot: '◌' },
+  idle:     { color: '#315150', dot: '' }
+};
+
+function setStatus(mode, text) {
+  sync.mode = mode;
+  const el = document.getElementById('sync-badge');
+  if (!el) return;
+  const style = STATUS_STYLES[mode] || STATUS_STYLES.idle;
+  el.textContent = (style.dot ? style.dot + ' ' : '') + text;
+  el.style.color = style.color;
+}
+
+function setBanner(kind, message) {
+  const el = document.getElementById('sync-banner');
+  if (!el) return;
+  if (!message) { el.innerHTML = ''; return; }
+  const cls = kind === 'error' ? 'alert' : 'warn';
+  el.innerHTML = '<div class="' + cls + '">' + message + '</div>';
+}
+
+function stamp(iso) {
+  const d = iso ? new Date(iso) : new Date();
+  return isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+/* --------------------------------------------------------------------------
+   Account data. Live values arrive in the snapshot; these are the fallbacks
+   used before the first sync lands.
+   -------------------------------------------------------------------------- */
+
+const ACCOUNT_FALLBACK = {
+  working:    { label: 'Working Account',     opening: 19655, closing: 51234 },
+  regulation: { label: 'Regulation Account',  opening: 15658, closing: 7059 },
+  savings:    { label: 'Savings Account',     opening: 49000, closing: 50000, projected12m: 102000 },
+  profit:     { label: 'Profit Reinvestment', opening: 0,     closing: 0,     projected12m: 0 }
+};
+
+// Descriptive chrome — not derived from the sheet.
+const ACCOUNT_META = {
+  working:    { color: '#ccf492', border: 'rgba(204,244,146,.25)', sub: 'Day to day operations' },
+  regulation: { color: '#3b82f6', border: 'rgba(59,130,246,.3)',   sub: 'Tax obligations only' },
+  savings:    { color: '#f59e0b', border: 'rgba(245,158,11,.3)',   sub: '$1,000 per week. Never touch.' },
+  profit:     { color: '#8b5cf6', border: 'rgba(139,92,246,.3)',   sub: 'Future capex. Growth.' }
+};
+
+const ACCOUNT_ORDER = ['working', 'regulation', 'savings', 'profit'];
+
+let ACCOUNTS_LIVE = JSON.parse(JSON.stringify(ACCOUNT_FALLBACK));
+
+function renderAccounts() {
+  const grid = document.getElementById('accounts-grid');
+  if (!grid) return;
+
+  const cw = WEEKLY[CW_IDX] || {};
+  let html = '';
+
+  ACCOUNT_ORDER.forEach(function (key) {
+    const a = ACCOUNTS_LIVE[key] || ACCOUNT_FALLBACK[key];
+    const meta = ACCOUNT_META[key];
+    if (!a) return;
+
+    html += '<div class="card" style="margin:0;border-color:' + meta.border + ';">';
+    html += '<div style="font-size:11px;font-weight:700;color:' + meta.color + ';text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">' + (a.label || meta.label) + '</div>';
+    html += '<div style="font-size:10px;color:#d0dbd6;opacity:.6;margin-bottom:10px;">' + meta.sub + '</div>';
+
+    html += '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;">';
+    html += '<span style="color:#d0dbd6;opacity:.5;">Opening</span>';
+    html += '<span style="color:' + meta.color + ';font-weight:800;font-size:15px;">' + fmtK(a.opening || 0) + '</span></div>';
+
+    html += '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:10px;">';
+    html += '<span style="color:#d0dbd6;opacity:.5;">Closing</span>';
+    html += '<span style="color:' + meta.color + ';font-weight:800;font-size:15px;">' + fmtK(a.closing || 0) + '</span></div>';
+
+    html += '<div style="padding-top:8px;border-top:1px solid rgba(49,81,80,.3);">';
+    if (key === 'working') {
+      html += '<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px;"><span style="color:#d0dbd6;opacity:.6;">This week in</span><span style="color:#3b82f6;font-weight:600;">' + fmt(cw.total_in || 0) + '</span></div>';
+      html += '<div style="display:flex;justify-content:space-between;font-size:11px;"><span style="color:#d0dbd6;opacity:.6;">This week out</span><span style="color:#f59e0b;font-weight:600;">' + fmt(cw.total_out || 0) + '</span></div>';
+    } else if (key === 'regulation') {
+      html += '<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px;"><span style="color:#d0dbd6;opacity:.6;">Super</span><span style="color:#3b82f6;">$1,044/wk</span></div>';
+      html += '<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px;"><span style="color:#d0dbd6;opacity:.6;">PAYG</span><span style="color:#3b82f6;">$2,000/wk</span></div>';
+      html += '<div style="display:flex;justify-content:space-between;font-size:11px;"><span style="color:#d0dbd6;opacity:.6;">BAS</span><span style="color:#3b82f6;">$1,456/wk</span></div>';
+    } else {
+      html += '<div style="font-size:8px;color:#d0dbd6;opacity:.5;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Projected — In 12 Months</div>';
+      html += '<div style="font-size:22px;font-weight:800;color:' + meta.color + ';">' + fmtK(a.projected12m || 0) + '</div>';
+      if (key === 'profit' && !(a.closing > 0)) {
+        html += '<div style="font-size:9px;color:#8b5cf6;opacity:.7;margin-top:3px;">Ready when you are.</div>';
+      }
+    }
+    html += '</div></div>';
+  });
+
+  grid.innerHTML = html;
+
+  const totalEl = document.getElementById('accounts-total');
+  if (totalEl) {
+    let total = 0;
+    let breakdown = '';
+    ACCOUNT_ORDER.forEach(function (key) {
+      const a = ACCOUNTS_LIVE[key] || ACCOUNT_FALLBACK[key];
+      if (!a) return;
+      total += (a.closing || 0);
+      breakdown += (a.label || key) + ' ' + fmtK(a.closing || 0) + '<br>';
+    });
+
+    let t = '<div class="card clime" style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;">';
+    t += '<div><div style="font-size:9px;color:#d0dbd6;opacity:.6;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Total Across All Accounts</div>';
+    t += '<div style="font-size:26px;font-weight:800;color:' + (total < 0 ? '#ef4444' : '#ccf492') + ';">' + fmtK(total) + '</div></div>';
+    t += '<div style="font-size:9px;color:#d0dbd6;opacity:.5;text-align:right;line-height:1.8;">' + breakdown + '</div></div>';
+    totalEl.innerHTML = t;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Derived series. MONTHLY and YTD are recomputed from WEEKLY on every sync so
+   every tab reflects the sheet, rather than drifting from frozen constants.
+   -------------------------------------------------------------------------- */
+
+const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+/** Australian FY: 1 Jul – 30 Jun. Returns the year the FY ends in. */
+function fyEndYear(iso) {
+  const y = parseInt(iso.slice(0, 4), 10);
+  const m = parseInt(iso.slice(5, 7), 10); // 1-based
+  return m >= 7 ? y + 1 : y;
+}
+
+function rebuildDerived() {
+  // --- MONTHLY, grouped by calendar month across the whole weekly series ---
+  const order = [];
+  const groups = {};
+  WEEKLY.forEach(function (w) {
+    const key = w.iso.slice(0, 7);
+    if (!groups[key]) { groups[key] = { in: 0, out: 0 }; order.push(key); }
+    groups[key].in  += (w.total_in || 0);
+    groups[key].out += (w.total_out || 0);
+  });
+
+  MONTHLY.length = 0;
+  order.forEach(function (key) {
+    const g = groups[key];
+    const monthIdx = parseInt(key.slice(5, 7), 10) - 1;
+    MONTHLY.push({
+      label: MONTH_ABBR[monthIdx] + ' ' + key.slice(0, 4),
+      in: Math.round(g.in),
+      out: Math.round(g.out),
+      net: Math.round(g.in - g.out)
+    });
+  });
+
+  // --- YTD, cumulative from the start of the current FY through this week ---
+  const current = WEEKLY[CW_IDX];
+  if (current) {
+    const fy = fyEndYear(current.iso);
+    let sales = 0, cashIn = 0, cashOut = 0;
+    WEEKLY.forEach(function (w) {
+      if (w.iso > current.iso) return;          // future weeks are projections
+      if (fyEndYear(w.iso) !== fy) return;      // prior financial years
+      sales   += (w.sales || 0);
+      cashIn  += (w.total_in || 0);
+      cashOut += (w.total_out || 0);
+    });
+    YTD.sales = Math.round(sales);
+    YTD.in    = Math.round(cashIn);
+    YTD.out   = Math.round(cashOut);
+  }
+}
+
+function renderAll() {
+  [['overview', renderOverview], ['weekly', renderWeekly], ['clients', renderClients],
+   ['fy performance', renderMonthly], ['accounts', renderAccounts]
+  ].forEach(function (pair) {
+    try { pair[1](); }
+    catch (err) { console.error('[render] ' + pair[0] + ' failed', err); }
+  });
+}
+
+/* --------------------------------------------------------------------------
+   Snapshot handling.
+   -------------------------------------------------------------------------- */
+
+function validateSnapshot(snap) {
+  if (!snap || typeof snap !== 'object') return 'snapshot is empty';
+  if (snap.error) return String(snap.error);
+  if (snap.version !== SNAPSHOT_VERSION) return 'snapshot version ' + snap.version + ' is not supported';
+  if (!Array.isArray(snap.weekly) || snap.weekly.length < 2) return 'snapshot contains no weekly data';
+  const bad = snap.weekly.find(function (w) { return !w || typeof w.iso !== 'string'; });
+  if (bad) return 'snapshot contains a malformed week';
+  return null;
+}
+
+function applySnapshot(snap, origin) {
+  const problem = validateSnapshot(snap);
+  if (problem) {
+    setStatus('error', 'Sync failed');
+    setBanner('error', '⚠ Could not read the spreadsheet: ' + problem + ' The figures below are the last known good data.');
+    return false;
+  }
+
+  // Preserve where the user was looking across a refresh.
+  const wasLive = viewIdx === CW_IDX;
+  const prevIso = WEEKLY[viewIdx] ? WEEKLY[viewIdx].iso : null;
+
+  WEEKLY.length = 0;
+  snap.weekly.forEach(function (w, i) {
+    WEEKLY.push({
+      idx: i,
+      iso: w.iso,
+      label: w.label,
+      opening: w.opening || 0,
+      sales: w.sales || 0,
+      other_income: w.other_income || 0,
+      total_in: w.total_in || 0,
+      supplier: w.supplier || 0,
+      total_out: w.total_out || 0,
+      closing: w.closing || 0
+    });
+  });
+
+  CW_IDX = Math.max(0, Math.min(WEEKLY.length - 1, snap.currentWeekIdx || 0));
+
+  if (wasLive) {
+    viewIdx = CW_IDX;
+  } else {
+    const found = WEEKLY.findIndex(function (w) { return w.iso === prevIso; });
+    viewIdx = found >= 0 ? found : CW_IDX;
+  }
+
+  if (snap.accounts) {
+    ACCOUNT_ORDER.forEach(function (key) {
+      if (snap.accounts[key]) {
+        ACCOUNTS_LIVE[key] = Object.assign({}, ACCOUNT_FALLBACK[key], snap.accounts[key]);
+      }
+    });
+  }
+
+  rebuildDerived();
+  renderAll();
+
+  sync.lastUpdated = snap.generatedAt || new Date().toISOString();
+  setBanner(null, null);
+  setStatus(sync.mode === 'realtime' ? 'realtime' : 'polling',
+            (sync.mode === 'realtime' ? 'Live' : 'Polling') + ' · ' + stamp(sync.lastUpdated));
+  return true;
+}
+
+/* --------------------------------------------------------------------------
+   Legacy path: build a snapshot from raw CSV rows, for sheets published as
+   CSV rather than served by Apps Script. Row numbers are 1-based and match
+   the spreadsheet layout documented in the skill file.
+   -------------------------------------------------------------------------- */
+
+const CSV_ROW = { weekDates: 6, opening: 8, sales: 65, otherIncome: 74, receipts: 76, supplier: 98, paymentsOut: 215, closing: 217 };
+
+function csvNum(v) {
+  if (v === null || v === undefined || v === '') return 0;
+  if (typeof v === 'number') return isFinite(v) ? v : 0;
+  const s = String(v).trim();
+  if (!s) return 0;
+  const negative = /^\(.*\)$/.test(s);
+  const n = parseFloat(s.replace(/[()$,\s]/g, ''));
+  if (!isFinite(n)) return 0;
+  return negative ? -n : n;
+}
+
+function csvDate(v) {
+  if (!v) return null;
+  if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
+  const s = String(v).trim();
+  if (!s) return null;
+
+  // dd-Mon-yy / dd Mon yy
+  const m = s.match(/^(\d{1,2})[-\s]([A-Za-z]{3})[a-z]*[-\s](\d{2,4})$/);
+  if (m) {
+    const mi = MONTH_ABBR.indexOf(m[2].charAt(0).toUpperCase() + m[2].slice(1, 3).toLowerCase());
+    if (mi >= 0) {
+      const yr = m[3].length === 2 ? 2000 + parseInt(m[3], 10) : parseInt(m[3], 10);
+      return new Date(Date.UTC(yr, mi, parseInt(m[1], 10)));
+    }
+  }
+  // Excel serial
+  const serial = parseFloat(s);
+  if (isFinite(serial) && serial > 20000 && serial < 80000 && /^\d+(\.\d+)?$/.test(s)) {
+    return new Date(Math.round((serial - 25569) * 86400000));
+  }
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function snapshotFromRows(rows) {
+  const row = function (n) { return rows[n - 1] || []; };
+  const dates = row(CSV_ROW.weekDates);
+  const opening = row(CSV_ROW.opening);
+  const sales = row(CSV_ROW.sales);
+  const otherIn = row(CSV_ROW.otherIncome);
+  const receipts = row(CSV_ROW.receipts);
+  const supplier = row(CSV_ROW.supplier);
+  const paymentsOut = row(CSV_ROW.paymentsOut);
+  const closing = row(CSV_ROW.closing);
+
+  const weekly = [];
+  for (let col = 0; col < dates.length; col++) {
+    const d = csvDate(dates[col]);
+    if (!d || d.getUTCFullYear() < 2020 || d.getUTCFullYear() > 2100) continue;
+
+    const open = csvNum(opening[col]);
+    const totalIn = csvNum(receipts[col]);
+    const totalOut = csvNum(paymentsOut[col]);
+    const rawClose = closing[col];
+    const close = (rawClose === '' || rawClose === null || rawClose === undefined)
+      ? open + totalIn - totalOut
+      : csvNum(rawClose);
+
+    const iso = d.toISOString().slice(0, 10);
+    const dd = ('0' + d.getUTCDate()).slice(-2);
+    weekly.push({
+      idx: weekly.length,
+      iso: iso,
+      label: dd + ' ' + MONTH_ABBR[d.getUTCMonth()] + ' ' + String(d.getUTCFullYear()).slice(2),
+      opening: open,
+      sales: csvNum(sales[col]),
+      other_income: csvNum(otherIn[col]),
+      total_in: totalIn,
+      supplier: csvNum(supplier[col]),
+      total_out: totalOut,
+      closing: close
+    });
+  }
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+  let currentIdx = 0;
+  weekly.forEach(function (w, i) { if (w.iso <= todayIso) currentIdx = i; });
+
+  const cw = weekly[currentIdx];
+  return {
+    version: SNAPSHOT_VERSION,
+    generatedAt: new Date().toISOString(),
+    currentWeekIso: cw ? cw.iso : null,
+    currentWeekIdx: currentIdx,
+    weekly: weekly,
+    // CSV export covers the Working Account only; leave the rest to fallbacks.
+    accounts: cw ? { working: { label: 'Working Account', opening: cw.opening, closing: cw.closing } } : {}
+  };
+}
+
+/* --------------------------------------------------------------------------
+   Fetching.
+   -------------------------------------------------------------------------- */
+
+async function fetchSnapshot() {
+  // 1. The Supabase snapshot row — written by Apps Script, RLS-guarded.
+  if (sb && sync.sheetId) {
+    const { data, error } = await sb
+      .from(SNAPSHOT_TABLE)
+      .select('payload, updated_at')
+      .eq('sheet_id', sync.sheetId)
+      .maybeSingle();
+    if (!error && data && data.payload) return { snapshot: data.payload, via: 'supabase' };
+  }
+
+  // 2. Apps Script / published CSV, proxied to get around CORS.
+  if (sync.scriptUrl) {
+    const res = await fetch(SHEET_PROXY + '?url=' + encodeURIComponent(sync.scriptUrl), { cache: 'no-store' });
+    let body;
+    try { body = await res.json(); }
+    catch (_) { throw new Error('The sync service returned an unreadable response.'); }
+
+    if (!res.ok) throw new Error(body && body.error ? body.error : 'Sync service returned ' + res.status);
+    if (body.kind === 'snapshot') return { snapshot: body.snapshot, via: 'apps-script' };
+    if (body.kind === 'rows') return { snapshot: snapshotFromRows(body.rows), via: 'csv' };
+    throw new Error('The sync service returned an unrecognised payload.');
+  }
+
+  return null;
+}
+
+async function refreshFromSource(isInitial) {
+  if (sync.inFlight) return;
+  sync.inFlight = true;
+  try {
+    const result = await fetchSnapshot();
+    if (!result) {
+      setStatus('cached', 'Cached data');
+      setBanner('warn', '⚡ No live data source is linked to this account yet, so the figures below are the built-in sample data.');
+      return;
+    }
+    applySnapshot(result.snapshot, result.via);
+  } catch (err) {
+    console.error('[sync] refresh failed', err);
+    setStatus('error', 'Sync failed');
+    setBanner('error', '⚠ Live sync failed: ' + (err && err.message ? err.message : err) +
+      (isInitial ? ' Showing the last known figures.' : ' Retrying automatically.'));
+  } finally {
+    sync.inFlight = false;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Realtime subscription, with polling as the fallback.
+   -------------------------------------------------------------------------- */
+
+function startRealtime() {
+  if (!sb || !sync.sheetId) return;
+  stopRealtime();
+
+  sync.channel = sb
+    .channel('snapshot:' + sync.sheetId)
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: SNAPSHOT_TABLE,
+      filter: 'sheet_id=eq.' + sync.sheetId
+    }, function (payload) {
+      const rowData = payload && payload.new;
+      if (rowData && rowData.payload) {
+        sync.mode = 'realtime';
+        applySnapshot(rowData.payload, 'realtime');
+      }
+    })
+    .subscribe(function (status) {
+      if (status === 'SUBSCRIBED') {
+        sync.mode = 'realtime';
+        stopPolling();
+        setStatus('realtime', 'Live · ' + (sync.lastUpdated ? stamp(sync.lastUpdated) : stamp()));
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        // Websocket unavailable — degrade to polling rather than going stale.
+        startPolling();
+      }
+    });
+}
+
+function stopRealtime() {
+  if (sb && sync.channel) {
+    sb.removeChannel(sync.channel);
+    sync.channel = null;
+  }
+}
+
+function startPolling() {
+  if (sync.pollTimer) return;
+  sync.mode = 'polling';
+  setStatus('polling', 'Polling · ' + (sync.lastUpdated ? stamp(sync.lastUpdated) : stamp()));
+  sync.pollTimer = setInterval(function () { refreshFromSource(false); }, POLL_INTERVAL_MS);
+}
+
+function stopPolling() {
+  if (sync.pollTimer) { clearInterval(sync.pollTimer); sync.pollTimer = null; }
+}
+
+// Polling while the tab is hidden burns quota for nothing.
+document.addEventListener('visibilitychange', function () {
+  if (!sync.sheetId) return;
+  if (document.hidden) {
+    stopPolling();
+  } else if (sync.mode !== 'realtime') {
+    refreshFromSource(false);
+    startPolling();
+  }
+});
+
+/* --------------------------------------------------------------------------
+   Authentication.
+   -------------------------------------------------------------------------- */
+
 async function handleLogin() {
+  if (!sb) return;
   const email = document.getElementById('login-email').value.trim();
   const password = document.getElementById('login-password').value;
   const errEl = document.getElementById('login-error');
+  const btn = document.getElementById('login-btn');
+
   errEl.style.display = 'none';
-  document.getElementById('login-btn').textContent = 'Signing in...';
+  btn.textContent = 'Signing in...';
+  btn.disabled = true;
 
-  const { data, error } = await sb.auth.signInWithPassword({ email, password });
-
-  if (error) {
+  try {
+    const { error } = await sb.auth.signInWithPassword({ email: email, password: password });
+    if (error) {
+      errEl.textContent = 'Invalid email or password. Please try again.';
+      errEl.style.display = 'block';
+      return;
+    }
+    await launchDashboard(email);
+  } catch (err) {
+    errEl.textContent = 'Could not reach the sign-in service. Check your connection and try again.';
     errEl.style.display = 'block';
-    document.getElementById('login-btn').textContent = 'Sign In';
-    return;
+  } finally {
+    btn.textContent = 'Sign In';
+    btn.disabled = false;
   }
-
-  await launchDashboard(email);
 }
 
 async function launchDashboard(email) {
+  if (!sb) return;
+  sync.email = email;
+
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('dashboard-wrap').style.display = 'block';
-  showSyncBadge('Loading your data...', '#f59e0b');
 
-  // Get this user's sheet_id from clients table
-  const { data: clientData, error: clientError } = await sb
-    .from('clients')
-    .select('sheet_id, full_name')
-    .eq('email', email)
-    .single();
+  // The charts were first drawn while this container was display:none, which
+  // sizes their canvases to zero. Redraw now that the layout is real.
+  renderAll();
+  setStatus('loading', 'Loading…');
 
-  // If RLS blocks the query or no sheet linked, use default Apps Script URL
-  const DEFAULT_SCRIPT = 'https://script.google.com/macros/s/AKfycbzOauv605mtvkd7PrUG7a1EjGlE9B9h-t0JUfmyAJ-ET-uxO_Kq4aclpJIw8cfi3q_L/exec';
-  
-  const sheetId = (clientData && clientData.sheet_id) ? clientData.sheet_id : DEFAULT_SCRIPT;
-  await fetchSheetData(sheetId);
-}
-
-async function fetchSheetData(sheetId) {
-  showSyncBadge('Syncing live data...', '#f59e0b');
-
-  // Use published CSV URL from Supabase clients table
-  // Build the Google Sheets CSV URL
-  let googleUrl;
-  if (sheetId.startsWith('https://')) {
-    googleUrl = sheetId.includes('?')
-      ? sheetId + '&output=csv&sheet=Business%20Working%20Account'
-      : sheetId + '?output=csv&sheet=Business%20Working%20Account';
-  } else {
-    googleUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTEgXoNhYXilNYCqd8SIvcwXpN_G4ozpr2VfPoouiUCdQQBILx91w3Ckp2_gkfxz6F21wmSUSDbwEcG/pub?output=csv&sheet=Business%20Working%20Account';
-  }
-
-  // Route through Netlify function to avoid CORS
-  const PUBLISHED_CSV = '/.netlify/functions/sheet?url=' + encodeURIComponent(googleUrl);
-
+  // Resolve which spreadsheet this login is entitled to. This fails closed:
+  // if we cannot establish the link, we show no data rather than defaulting
+  // to somebody else's sheet.
+  let record = null;
   try {
-    const response = await fetch(PUBLISHED_CSV);
-    const rows = await response.json();
-
-    if (!rows || rows.length < 10) {
-      showSyncBadge('Using cached data', '#f59e0b');
-      renderOverview(); renderWeekly();
-      return;
-    }
-
-    // Row 6 = index 5 (dates), Row 8 = index 7 (opening)
-    // Row 65 = index 64 (sales), Row 76 = index 75 (total in), Row 98 = index 97 (total out)
-    const dateRow = rows[5] || [];
-    const openRow = rows[7] || [];
-    const salesRow = rows[64] || [];
-    const inRow = rows[75] || [];
-    const outRow = rows[97] || [];
-
-    if (!dateRow.length) {
-      showSyncBadge('Sheet format mismatch', '#ef4444');
-      renderOverview(); renderWeekly();
-      return;
-    }
-
-    // Find first date column - look for date values
-    let startCol = 3;
-    for (let i = 3; i < dateRow.length; i++) {
-      const v = dateRow[i];
-      if (v && v !== '' && v !== null) {
-        const d = parseDate(v);
-        if (d && !isNaN(d.getTime()) && d.getFullYear() > 2020) {
-          startCol = i; break;
-        }
-      }
-    }
-
-    const newWeekly = [];
-    const today = new Date();
-    let cwIdx = 0;
-
-    const parseNum = (val) => {
-      if (val === null || val === undefined || val === '') return 0;
-      if (typeof val === 'number') return val;
-      const cleaned = String(val).replace(/[$,]/g, '').trim();
-      return parseFloat(cleaned) || 0;
-    };
-
-    const parseDate = (val) => {
-      if (!val) return null;
-      if (val instanceof Date) return val;
-      const s = String(val);
-      // Handle ISO timestamp: "2026-06-18T08:00:00.000Z"
-      if (s.includes('T') || s.includes('-')) {
-        const d = new Date(s);
-        if (!isNaN(d.getTime())) return d;
-      }
-      // Handle "Date(2026,5,18)" format
-      const m = s.match(/Date\((\d+),(\d+),(\d+)\)/);
-      if (m) return new Date(parseInt(m[1]), parseInt(m[2]), parseInt(m[3]));
-      // Handle dd-Mon-yy
-      const p = s.split('-');
-      if (p.length === 3 && isNaN(p[0]) === false) {
-        const MONTHS = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
-        const yr = parseInt(p[2]) < 100 ? 2000 + parseInt(p[2]) : parseInt(p[2]);
-        return new Date(yr, MONTHS[p[1]] ?? parseInt(p[1])-1, parseInt(p[0]));
-      }
-      // Handle Excel serial number
-      if (typeof val === 'number' && val > 40000) {
-        return new Date((val - 25569) * 86400 * 1000);
-      }
-      return null;
-    };
-
-    for (let col = startCol; col < dateRow.length; col++) {
-      const dateVal = dateRow[col];
-      if (!dateVal) continue;
-
-      const dateObj = parseDate(dateVal);
-      if (!dateObj || isNaN(dateObj.getTime())) continue;
-
-      const opening = parseNum(openRow[col]);
-      const sales = parseNum(salesRow[col]);
-      const totalIn = parseNum(inRow[col]);
-      const totalOut = parseNum(outRow[col]);
-      const closing = opening + totalIn - totalOut;
-
-      const idx = newWeekly.length;
-      if (dateObj <= today) cwIdx = idx;
-
-      const dd = String(dateObj.getDate()).padStart(2,'0');
-      const mm = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][dateObj.getMonth()];
-      const yy = String(dateObj.getFullYear()).slice(2);
-
-      newWeekly.push({
-        idx, label: dd+' '+mm+' '+yy,
-        iso: dateObj.toISOString().split('T')[0],
-        opening, sales,
-        other_income: Math.max(0, totalIn - sales),
-        total_in: totalIn, supplier: 0,
-        total_out: totalOut, closing
-      });
-    }
-
-    if (newWeekly.length > 5) {
-      WEEKLY.length = 0;
-      newWeekly.forEach(w => WEEKLY.push(w));
-      viewIdx = cwIdx;
-      renderOverview();
-      renderWeekly();
-      showSyncBadge('✓ Live — ' + new Date().toLocaleTimeString(), '#ccf492');
-    } else {
-      showSyncBadge('Using cached data', '#f59e0b');
-      renderOverview(); renderWeekly();
-    }
-
-  } catch(err) {
-    console.error('Sheet fetch error:', err);
-    showSyncBadge('Using cached data', '#f59e0b');
-    renderOverview(); renderWeekly();
+    const { data, error } = await sb
+      .from('clients')
+      .select('sheet_id, script_url, full_name')
+      .eq('email', email)
+      .maybeSingle();
+    if (error) throw error;
+    record = data;
+  } catch (err) {
+    console.error('[sync] client lookup failed', err);
+    setStatus('error', 'Account not verified');
+    setBanner('error', '⚠ We could not verify which spreadsheet belongs to this account, so live data is switched off. The figures below are sample data. Contact your administrator.');
+    return;
   }
+
+  if (!record || !record.sheet_id) {
+    setStatus('cached', 'No sheet linked');
+    setBanner('warn', '⚡ No spreadsheet is linked to <strong>' + email + '</strong> yet, so the figures below are sample data. Contact your administrator to connect your sheet.');
+    return;
+  }
+
+  sync.sheetId = record.sheet_id;
+  sync.scriptUrl = record.script_url || null;
+
+  await refreshFromSource(true);
+  startRealtime();
+  // Realtime confirms asynchronously; poll until it does, then stopPolling().
+  startPolling();
 }
 
 async function handleLogout() {
+  stopRealtime();
+  stopPolling();
+  sync.email = null;
+  sync.sheetId = null;
+  sync.scriptUrl = null;
+  sync.lastUpdated = null;
+
   await sb.auth.signOut();
+
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('dashboard-wrap').style.display = 'none';
   document.getElementById('login-email').value = '';
   document.getElementById('login-password').value = '';
   document.getElementById('login-btn').textContent = 'Sign In';
+  setStatus('idle', '');
+  setBanner(null, null);
 }
 
-// Check existing session on load
-(async () => {
-  const { data: { session } } = await sb.auth.getSession();
-  if (session && session.user) {
-    await launchDashboard(session.user.email);
+// Keep tabs in step when a session is refreshed or ended elsewhere.
+if (sb) sb.auth.onAuthStateChange(function (event, session) {
+  if (event === 'SIGNED_OUT') {
+    stopRealtime();
+    stopPolling();
+  } else if (event === 'SIGNED_IN' && session && session.user && !sync.sheetId) {
+    launchDashboard(session.user.email);
+  }
+});
+
+// Restore an existing session on load.
+(async function () {
+  renderAccounts();
+  if (!sb) return;
+  try {
+    const { data } = await sb.auth.getSession();
+    if (data && data.session && data.session.user) {
+      await launchDashboard(data.session.user.email);
+    }
+  } catch (err) {
+    console.error('[auth] session restore failed', err);
   }
 })();
 </script>
