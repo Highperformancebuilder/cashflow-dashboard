@@ -90,20 +90,58 @@ function rowValues_(grid, rowNumber) {
   return r ? r : [];
 }
 
+// Every row is expressed as an offset from the week-date row, so inserting a
+// row above row 6 shifts the layout without breaking parsing.
+var ROW_OFFSET = {
+  opening:     ROW.opening               - ROW.weekDates,
+  sales:       ROW.totalSales            - ROW.weekDates,
+  otherIncome: ROW.totalOtherIncome      - ROW.weekDates,
+  receipts:    ROW.totalReceipts         - ROW.weekDates,
+  supplier:    ROW.totalSupplierPayments - ROW.weekDates,
+  paymentsOut: ROW.totalPaymentsOut      - ROW.weekDates,
+  closing:     ROW.closing               - ROW.weekDates
+};
+
+/**
+ * Locate the week-date row. Returns a 0-based index, or -1.
+ * Bare numbers are skipped so a row of figures cannot be read as dates.
+ */
+function findWeekDateRow_(grid) {
+  var bestRow = -1, bestCount = 0;
+  var limit = Math.min(grid.length, 40);
+  for (var r = 0; r < limit; r++) {
+    var row = grid[r] || [];
+    var count = 0;
+    for (var c = 0; c < row.length; c++) {
+      var raw = row[c];
+      if (raw === '' || raw === null || raw === undefined) continue;
+      if (typeof raw === 'number') continue;
+      var d = date_(raw);
+      if (d && d.getUTCFullYear() >= 2015 && d.getUTCFullYear() <= 2100) count++;
+    }
+    if (count > bestCount) { bestCount = count; bestRow = r; }
+  }
+  return bestCount >= 5 ? bestRow : -1;
+}
+
 /**
  * Parse the Working Account grid into the weekly series.
  * Columns are discovered from the week-date row rather than hardcoded, so the
  * series keeps working when weeks are appended to the sheet.
  */
 function parseWeekly_(grid) {
-  var dates    = rowValues_(grid, ROW.weekDates);
-  var opening  = rowValues_(grid, ROW.opening);
-  var sales    = rowValues_(grid, ROW.totalSales);
-  var otherIn  = rowValues_(grid, ROW.totalOtherIncome);
-  var receipts = rowValues_(grid, ROW.totalReceipts);
-  var supplier = rowValues_(grid, ROW.totalSupplierPayments);
-  var payments = rowValues_(grid, ROW.totalPaymentsOut);
-  var closing  = rowValues_(grid, ROW.closing);
+  var base = findWeekDateRow_(grid);
+  if (base < 0) return [];
+
+  var at = function (offset) { return grid[base + offset] || []; };
+  var dates    = at(0);
+  var opening  = at(ROW_OFFSET.opening);
+  var sales    = at(ROW_OFFSET.sales);
+  var otherIn  = at(ROW_OFFSET.otherIncome);
+  var receipts = at(ROW_OFFSET.receipts);
+  var supplier = at(ROW_OFFSET.supplier);
+  var payments = at(ROW_OFFSET.paymentsOut);
+  var closing  = at(ROW_OFFSET.closing);
 
   var weeks = [];
   for (var col = 0; col < dates.length; col++) {
@@ -142,9 +180,10 @@ function parseWeekly_(grid) {
  * the week-date row when present, else by taking the last populated column.
  */
 function parseAccount_(grid, currentIso) {
-  var dates   = rowValues_(grid, ROW.weekDates);
-  var opening = rowValues_(grid, ROW.opening);
-  var closing = rowValues_(grid, ROW.closing);
+  var base = findWeekDateRow_(grid);
+  var dates   = base >= 0 ? (grid[base] || [])                          : rowValues_(grid, ROW.weekDates);
+  var opening = base >= 0 ? (grid[base + ROW_OFFSET.opening] || [])     : rowValues_(grid, ROW.opening);
+  var closing = base >= 0 ? (grid[base + ROW_OFFSET.closing] || [])     : rowValues_(grid, ROW.closing);
 
   var target = -1;
   for (var col = 0; col < dates.length; col++) {
@@ -197,7 +236,8 @@ function buildSnapshot() {
 
   var weekly = parseWeekly_(grids.working);
   if (!weekly.length) {
-    throw new Error('No week dates found on row ' + ROW.weekDates + ' of the Working Account sheet.');
+    throw new Error('No week dates found in the first 40 rows of the "' + ACCOUNTS[0].sheet +
+                    '" sheet. Expected them on row ' + ROW.weekDates + '.');
   }
 
   // Current week = the latest week whose start date has already passed.

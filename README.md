@@ -62,6 +62,11 @@ The sheet must be shared **Anyone with the link → Viewer**, and the weekly
 figures must live on a tab named `Business Working Account` in the layout
 below. A bad link is rejected without disturbing a working connection.
 
+Connecting tries several of Google's CSV endpoints in turn and keeps the one
+that works, so a `gid` in the pasted URL (whichever tab happened to be open
+when the link was copied) never overrides the named tab. If every endpoint
+fails, the error lists what each one reported.
+
 The connection is remembered in `localStorage` and, if the `clients` UPDATE
 policy is applied, written back to the signed-in account so it follows the
 user to another browser. **Disconnect** clears both.
@@ -176,8 +181,14 @@ breaks parsing; add rows below rather than reordering.
 | 215 | Total payments out |
 | 217 | Closing bank balance |
 
-Week **columns** are discovered by scanning row 6 for dates, so appending
+Week **columns** are discovered by scanning the week-date row, so appending
 weeks needs no code change.
+
+The week-date row is located by content rather than by its absolute number,
+and every other row is read as an offset from it. Inserting a row above row 6,
+or a CSV endpoint trimming leading blank rows, therefore shifts the whole
+layout without breaking parsing. Relative order still matters: do not reorder
+rows between row 6 and row 217.
 
 Sheets read: `Business Working Account`, `Regulation Bank Account`,
 `Business Savings Account`, `Profit Reinvest. Bank Account`.
@@ -196,6 +207,7 @@ node tests/e2e.js --no-chart  # same, with the Chart.js CDN blocked
 node tests/degraded.js        # CDN failures, RLS denial, unlinked account
 node tests/connect.js         # Connect tab, validation, 5s update loop
 node tests/url-test.js        # URL parsing (no browser needed)
+node tests/rowdetect-test.js  # sheet-layout parsing (no browser needed)
 ```
 
 ---

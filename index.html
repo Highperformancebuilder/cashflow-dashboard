@@ -1014,7 +1014,43 @@ function applySnapshot(snap, origin) {
    the spreadsheet layout documented in the skill file.
    -------------------------------------------------------------------------- */
 
+// Row numbers in the spreadsheet, 1-based. Everything is expressed as an
+// offset from the week-date row so the layout still resolves if the CSV
+// endpoint trims leading blank rows (gviz does this).
 const CSV_ROW = { weekDates: 6, opening: 8, sales: 65, otherIncome: 74, receipts: 76, supplier: 98, paymentsOut: 215, closing: 217 };
+const ROW_OFFSET = {
+  opening:     CSV_ROW.opening     - CSV_ROW.weekDates,
+  sales:       CSV_ROW.sales       - CSV_ROW.weekDates,
+  otherIncome: CSV_ROW.otherIncome - CSV_ROW.weekDates,
+  receipts:    CSV_ROW.receipts    - CSV_ROW.weekDates,
+  supplier:    CSV_ROW.supplier    - CSV_ROW.weekDates,
+  paymentsOut: CSV_ROW.paymentsOut - CSV_ROW.weekDates,
+  closing:     CSV_ROW.closing     - CSV_ROW.weekDates
+};
+
+/**
+ * Find the row carrying the week dates. Returns a 0-based index, or -1.
+ *
+ * Bare numbers are ignored so a row of figures cannot be mistaken for dates
+ * via the Excel-serial branch of csvDate.
+ */
+function findWeekDateRow(rows) {
+  let bestRow = -1, bestCount = 0;
+  const limit = Math.min(rows.length, 40);
+  for (let r = 0; r < limit; r++) {
+    const row = rows[r] || [];
+    let count = 0;
+    for (let c = 0; c < row.length; c++) {
+      const raw = row[c];
+      if (raw === '' || raw === null || raw === undefined) continue;
+      if (/^-?\d+(\.\d+)?$/.test(String(raw).trim())) continue;   // a number, not a date
+      const d = csvDate(raw);
+      if (d && d.getUTCFullYear() >= 2015 && d.getUTCFullYear() <= 2100) count++;
+    }
+    if (count > bestCount) { bestCount = count; bestRow = r; }
+  }
+  return bestCount >= 5 ? bestRow : -1;
+}
 
 function csvNum(v) {
   if (v === null || v === undefined || v === '') return 0;
@@ -1052,15 +1088,22 @@ function csvDate(v) {
 }
 
 function snapshotFromRows(rows) {
-  const row = function (n) { return rows[n - 1] || []; };
-  const dates = row(CSV_ROW.weekDates);
-  const opening = row(CSV_ROW.opening);
-  const sales = row(CSV_ROW.sales);
-  const otherIn = row(CSV_ROW.otherIncome);
-  const receipts = row(CSV_ROW.receipts);
-  const supplier = row(CSV_ROW.supplier);
-  const paymentsOut = row(CSV_ROW.paymentsOut);
-  const closing = row(CSV_ROW.closing);
+  const dateRow = findWeekDateRow(rows);
+  if (dateRow < 0) {
+    const snap = { version: SNAPSHOT_VERSION, weekly: [], accounts: {} };
+    snap.diagnostic = 'received ' + rows.length + ' rows; no row in the first 40 held 5 or more dates';
+    return snap;
+  }
+
+  const row = function (offset) { return rows[dateRow + offset] || []; };
+  const dates = row(0);
+  const opening = row(ROW_OFFSET.opening);
+  const sales = row(ROW_OFFSET.sales);
+  const otherIn = row(ROW_OFFSET.otherIncome);
+  const receipts = row(ROW_OFFSET.receipts);
+  const supplier = row(ROW_OFFSET.supplier);
+  const paymentsOut = row(ROW_OFFSET.paymentsOut);
+  const closing = row(ROW_OFFSET.closing);
 
   const weekly = [];
   for (let col = 0; col < dates.length; col++) {
@@ -1155,24 +1198,46 @@ function parseSheetSource(raw) {
 }
 
 /**
- * The URL the proxy should fetch for a source.
+ * URLs to try for a source, best first. Google exposes several CSV endpoints
+ * and which one works depends on how the sheet is shared and laid out, so the
+ * connect step tries them in turn and keeps whichever produced usable weeks.
  *
- * For an ordinary sheet this uses the gviz endpoint rather than the published
- * CSV: published CSV is served through Google's CDN and can lag several
- * minutes behind an edit, which would defeat the point of polling every 5s.
+ * Published CSV is deliberately last for an ordinary sheet: it is served
+ * through Google's CDN and can lag several minutes behind an edit, which would
+ * defeat polling every 5 seconds.
  */
-function buildFetchUrl(source) {
-  if (!source) return null;
-  if (source.kind === 'appsscript') return source.url;
+function candidateUrls(source) {
+  if (!source) return [];
+
+  if (source.kind === 'appsscript') return [source.url];
 
   if (source.kind === 'published') {
     const base = source.url.split('#')[0];
-    return base + (base.indexOf('?') >= 0 ? '&' : '?') + 'output=csv';
+    return [base + (base.indexOf('?') >= 0 ? '&' : '?') + 'output=csv'];
   }
 
-  let url = 'https://docs.google.com/spreadsheets/d/' + source.id + '/gviz/tq?tqx=out:csv&headers=0';
-  url += source.gid ? '&gid=' + source.gid : '&sheet=' + encodeURIComponent(WORKING_SHEET_NAME);
-  return url;
+  const base = 'https://docs.google.com/spreadsheets/d/' + source.id;
+  const list = [];
+
+  // By tab NAME first. The dashboard needs the working-account tab
+  // specifically — a gid copied from the address bar is just whichever tab
+  // happened to be open, which is usually not the one we want.
+  list.push(base + '/gviz/tq?tqx=out:csv&headers=0&sheet=' + encodeURIComponent(WORKING_SHEET_NAME));
+  list.push(base + '/export?format=csv&sheet=' + encodeURIComponent(WORKING_SHEET_NAME));
+
+  // export returns the literal grid — every row and column in position, which
+  // suits a row-indexed layout better than gviz's reshaped output.
+  if (source.gid) list.push(base + '/export?format=csv&gid=' + source.gid);
+
+  list.push(base + '/export?format=csv');
+  return list;
+}
+
+/** Kept for the stored `resolvedUrl` fast path; falls back to the first candidate. */
+function buildFetchUrl(source) {
+  if (source && source.resolvedUrl) return source.resolvedUrl;
+  const list = candidateUrls(source);
+  return list.length ? list[0] : null;
 }
 
 function sourceSummary(source) {
@@ -1204,33 +1269,84 @@ function clearStoredSource() {
    Fetching.
    -------------------------------------------------------------------------- */
 
-/** Fetch and parse one source. Throws with a human-readable message. */
-async function fetchFromSource(source) {
-  const target = buildFetchUrl(source);
-  if (!target) throw new Error('No data source is configured.');
+/** Fetch one URL through the proxy and parse it. Returns { snapshot } or { error }. */
+async function tryFetchUrl(target) {
+  let res, body;
+  try {
+    res = await fetch(SHEET_PROXY + '?url=' + encodeURIComponent(target), { cache: 'no-store' });
+  } catch (err) {
+    return { error: 'network error reaching the sync service' };
+  }
 
-  const res = await fetch(SHEET_PROXY + '?url=' + encodeURIComponent(target), { cache: 'no-store' });
-  let body;
   try { body = await res.json(); }
-  catch (_) { throw new Error('The sync service returned an unreadable response.'); }
+  catch (_) { return { error: 'unreadable response from the sync service' }; }
 
   if (!res.ok) {
-    const detail = body && body.error ? body.error : 'the sync service returned ' + res.status;
-    if (res.status === 502 && source.kind === 'sheet') {
-      throw new Error('Could not read that sheet (' + detail + '). Check it is shared as "Anyone with the link can view".');
-    }
-    throw new Error(detail);
+    return { error: (body && body.error) ? body.error : 'HTTP ' + res.status };
   }
 
-  if (body.kind === 'snapshot') return body.snapshot;
+  if (body.kind === 'snapshot') return { snapshot: body.snapshot };
+
   if (body.kind === 'rows') {
     const snap = snapshotFromRows(body.rows);
-    if (!snap.weekly.length) {
-      throw new Error('That sheet has no week dates on row 6 of the "' + WORKING_SHEET_NAME + '" tab. Check the tab name and layout.');
-    }
-    return snap;
+    if (snap.weekly && snap.weekly.length >= 2) return { snapshot: snap };
+    const shape = body.rows.length + ' rows × ' + (body.rows[0] ? body.rows[0].length : 0) + ' cols';
+    return { error: snap.diagnostic ? snap.diagnostic : 'no usable weeks found (' + shape + ')' };
   }
-  throw new Error('The sync service returned an unrecognised payload.');
+
+  return { error: 'unrecognised payload from the sync service' };
+}
+
+/**
+ * Fetch and parse a source, trying each candidate endpoint until one yields
+ * usable weeks. The winning URL is remembered on the source so polling goes
+ * straight to it instead of re-probing every 5 seconds.
+ */
+async function fetchFromSource(source) {
+  if (!source) throw new Error('No data source is configured.');
+
+  // Fast path: an endpoint that already worked for this source.
+  if (source.resolvedUrl) {
+    const quick = await tryFetchUrl(source.resolvedUrl);
+    if (quick.snapshot) return quick.snapshot;
+    // It stopped working — fall through and probe again.
+    source.resolvedUrl = null;
+  }
+
+  const targets = candidateUrls(source);
+  if (!targets.length) throw new Error('No data source is configured.');
+
+  const attempts = [];
+  for (let i = 0; i < targets.length; i++) {
+    const result = await tryFetchUrl(targets[i]);
+    if (result.snapshot) {
+      source.resolvedUrl = targets[i];
+      return result.snapshot;
+    }
+    attempts.push(describeEndpoint(targets[i]) + ' — ' + result.error);
+  }
+
+  // Everything failed. Report what each endpoint actually said, because
+  // "check the tab name" on its own is a dead end to debug.
+  const permissionLike = attempts.some(function (a) { return /40[13]|404|HTTP 502|Upstream returned/i.test(a); });
+  let message;
+  if (permissionLike) {
+    message = 'Could not read that spreadsheet. Check it is shared as <strong>Anyone with the link → Viewer</strong>.';
+  } else {
+    message = 'Read the spreadsheet, but could not find the weekly layout. The <strong>' + WORKING_SHEET_NAME +
+              '</strong> tab should have week dates on row 6 and the closing balance on row 217.';
+  }
+  throw new Error(message + '<br><br><span style="opacity:.75;font-size:10px;">Tried:<br>· ' + attempts.join('<br>· ') + '</span>');
+}
+
+/** Short human label for a candidate URL, for the diagnostics list. */
+function describeEndpoint(url) {
+  if (url.indexOf('script.google.com') >= 0) return 'Apps Script';
+  if (url.indexOf('/gviz/') >= 0) return 'tab by name (gviz)';
+  if (url.indexOf('gid=') >= 0) return 'tab by id (export)';
+  if (url.indexOf('sheet=') >= 0) return 'tab by name (export)';
+  if (url.indexOf('/pub') >= 0) return 'published CSV';
+  return 'first tab (export)';
 }
 
 async function fetchSnapshot() {

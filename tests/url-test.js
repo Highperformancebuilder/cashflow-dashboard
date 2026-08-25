@@ -11,9 +11,8 @@ const grab = (name) => {
   }
 };
 const WORKING_SHEET_NAME = 'Business Working Account';
-eval(grab('parseSheetSource'));
-eval(grab('buildFetchUrl'));
-eval(grab('sourceSummary'));
+// One eval so buildFetchUrl can see candidateUrls.
+eval([grab('parseSheetSource'), grab('candidateUrls'), grab('buildFetchUrl'), grab('sourceSummary')].join('\n'));
 
 const ID = '1MXTCOStUpHpGYrthqRb8NCuERbUIeyZcRZVvdG4P15c';
 let pass = 0, fail = 0;
@@ -64,8 +63,14 @@ t('sheet -> csv output', sheetUrl.includes('tqx=out:csv'), sheetUrl);
 t('sheet -> headers=0 (no header row eaten)', sheetUrl.includes('headers=0'), sheetUrl);
 t('sheet -> targets the working tab', sheetUrl.includes('sheet=Business%20Working%20Account'), sheetUrl);
 
-const gidUrl = buildFetchUrl(parseSheetSource('https://docs.google.com/spreadsheets/d/' + ID + '/edit#gid=99'));
-t('gid takes precedence over tab name', gidUrl.includes('gid=99') && !gidUrl.includes('sheet=Business'), gidUrl);
+// A gid copied from the address bar is just whichever tab was open, so the
+// named tab must win. (This assertion previously asserted the opposite, which
+// is exactly why connecting a real sheet failed.)
+const gidSource = parseSheetSource('https://docs.google.com/spreadsheets/d/' + ID + '/edit#gid=99');
+const gidUrl = buildFetchUrl(gidSource);
+t('tab name takes precedence over a pasted gid', gidUrl.includes('sheet=Business%20Working%20Account'), gidUrl);
+t('the gid is retained as a fallback candidate',
+  candidateUrls(gidSource).some(u => u.includes('gid=99')), JSON.stringify(candidateUrls(gidSource)));
 
 t('apps script passes through unchanged',
   buildFetchUrl(parseSheetSource('https://script.google.com/macros/s/AK/exec')) === 'https://script.google.com/macros/s/AK/exec');
@@ -78,9 +83,9 @@ t('null source -> null url', buildFetchUrl(null) === null);
 // --- every built URL must survive the proxy allowlist ----------------------
 const ALLOWED = new Set(['script.google.com', 'script.googleusercontent.com', 'docs.google.com']);
 for (const [name, input] of cases.map(c => [c[0], c[1]])) {
-  const u = buildFetchUrl(parseSheetSource(input));
-  const host = new URL(u).hostname;
-  t('proxy allows host for ' + name, ALLOWED.has(host), host);
+  const all = candidateUrls(parseSheetSource(input));
+  const bad = all.filter(u => !ALLOWED.has(new URL(u).hostname));
+  t('proxy allows every candidate for ' + name, bad.length === 0, bad.join(', '));
 }
 
 // --- summary is safe on every shape ---------------------------------------

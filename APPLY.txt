@@ -1,12 +1,16 @@
-Greg Jones Cashflow Dashboard — Realtime Sync + Connect Tab
-===========================================================
+Greg Jones Cashflow Dashboard
+Realtime Sync + Connect Tab + sheet-connection fix
+==================================================
+
+This supersedes the earlier zip. It contains the FIX for the
+"no week dates on row 6" error you hit when connecting the real sheet.
 
 WHAT THIS IS
 ------------
-The complete, final version of every file that changed. Not a patch — just
-copy these over your repo. Works whatever state your working tree is in.
+The complete, final version of every changed file. Not a patch — just copy
+these over your repo, overwriting. Works whatever state your tree is in.
 
-If you are still stuck mid-patch from earlier, clear it first:
+If a previous patch attempt left git mid-apply, clear it first:
 
     git am --abort
 
@@ -14,65 +18,51 @@ If you are still stuck mid-patch from earlier, clear it first:
 HOW TO APPLY
 ------------
 1. Unzip into the ROOT of your cloned repo, preserving folders.
-   It should overwrite index.html and add the rest.
-
-2. Check what changed:
-
-       git status
-       git diff --stat
-
-   Expect: index.html modified, plus these new files:
-       README.md
-       apps-script/Code.gs
-       netlify.toml
-       netlify/functions/sheet.js
-       supabase/schema.sql
-       tests/*.js
-
-3. Commit and push:
+2. Check:     git status
+3. Delete APPLY.txt if you don't want it committed.
+4. Commit and push:
 
        git add -A
-       git commit -m "Add realtime Google Sheets sync and a Connect tab"
+       git commit -m "Add realtime Google Sheets sync, Connect tab, and sheet-connection fix"
        git push -u origin claude/client-files-review-g1ngpj
 
-   (Delete APPLY.txt first if you don't want it in the repo.)
+5. Redeploy on Netlify (automatic if it is connected to this branch).
+
+
+WHAT WAS FIXED
+--------------
+Connecting a real sheet failed because a gid in the pasted URL
+(...edit?gid=457366843) replaced the tab name in the request. A gid from the
+address bar is just whichever tab was open, so the dashboard asked for the
+wrong tab and never mentioned "Business Working Account" at all.
+
+Now: the tab is requested BY NAME first; the gid is only a fallback.
+
+Also, the layout was read at fixed row numbers. Google's gviz endpoint can
+drop leading blank rows, shifting everything. The week-date row is now found
+by content and all other rows are read as offsets from it — so the sheet
+still parses if rows shift, or if you insert a row above row 6.
+
+If a connection still fails, the error now lists every endpoint tried and
+what each one said. Send me that text and it will point straight at the cause.
 
 
 FILES
 -----
-index.html                  The dashboard. Adds the Connect tab and the live
-                            sync layer. REPLACES your current file.
-apps-script/Code.gs         Paste into the spreadsheet's Apps Script project.
-                            Parses the sheet and pushes to Supabase on edit.
+index.html                  The dashboard. REPLACES your current file.
+apps-script/Code.gs         Optional: paste into the sheet's Apps Script for
+                            instant updates instead of 5-second polling.
 netlify/functions/sheet.js  CORS proxy for Google. Host-allowlisted.
 netlify.toml                Netlify build + functions config.
 supabase/schema.sql         Tables, RLS policies, Realtime publication.
 README.md                   Full setup instructions.
-tests/                      Browser + unit tests (need Playwright).
+tests/                      Browser + unit tests.
 
 
-BEFORE IT WORKS IN PRODUCTION
------------------------------
-1. Run supabase/schema.sql in the Supabase SQL editor.
-   RLS is currently OFF. Until you run this, the publishable key in
-   index.html lets any visitor read every client email and sheet id.
-   Re-run it even if you ran an earlier version — it adds the clients
-   UPDATE policy the Connect tab needs.
-
-2. Deploy to Netlify. Without netlify/functions/sheet.js deployed, the
-   dashboard cannot read Google Sheets at all (browser CORS blocks it).
-
-3. Open the Connect tab, paste your spreadsheet link, click Connect.
-   The sheet must be shared: Anyone with the link -> Viewer.
-
-Optional, for instant updates instead of 5-second polling: install the
-Apps Script bridge (README step 2) and paste its /exec URL into Connect.
-
-
-UPDATE SPEED
-------------
-Pasted sheet link      ~5 seconds (polling, pauses when tab is hidden)
-Apps Script /exec URL  instant (Supabase Realtime websocket)
-
-Note: 5s polling is ~720 Netlify function calls per hour per open
-dashboard. The Apps Script bridge does not poll.
+STILL REQUIRED BEFORE IT WORKS LIVE
+-----------------------------------
+1. Run supabase/schema.sql in the Supabase SQL editor (RLS is off until you
+   do — the publishable key in index.html exposes client emails and sheet ids).
+2. Deploy to Netlify so netlify/functions/sheet.js is live. Without it the
+   browser cannot read Google Sheets at all.
+3. Share the spreadsheet: Anyone with the link -> Viewer.
