@@ -29,15 +29,15 @@ subscription for Sheets. "Realtime" is therefore assembled from parts:
 ```
 
 If the websocket is unavailable, or the Apps Script trigger has not been
-installed, the dashboard falls back to polling the sheet every 60 seconds
+installed, the dashboard falls back to polling the sheet every 5 seconds
 through the Netlify function. The header badge always says which mode is
 active:
 
 | Badge | Meaning |
 |---|---|
 | `● Live` | Realtime websocket connected. Edits appear in seconds. |
-| `◐ Polling` | Websocket unavailable. Refreshing every 60s. |
-| `○ Cached data` | No sheet linked to this login. Showing sample data. |
+| `◐ Polling` | Websocket unavailable. Refreshing every 5s. |
+| `○ Not connected` | No sheet connected. Showing sample data. |
 | `⚠ Sync failed` | Something broke. The banner explains what. |
 
 Apps Script is the **only** place that parses spreadsheet rows and columns.
@@ -45,6 +45,36 @@ The dashboard consumes a versioned JSON contract and never touches row
 numbers, so a sheet layout change is a one-file fix.
 
 ---
+
+## Connecting a sheet
+
+The **Connect** tab takes a spreadsheet link, validates it, and starts syncing.
+It accepts any of:
+
+| Paste this | Update speed |
+|---|---|
+| `https://docs.google.com/spreadsheets/d/<id>/edit` | ~5s polling |
+| the bare spreadsheet id | ~5s polling |
+| a published-to-web CSV link (`/pub?output=csv`) | ~5s polling, but Google's CDN can lag several minutes |
+| an Apps Script `/exec` link (the bridge below) | instant, via websocket |
+
+The sheet must be shared **Anyone with the link → Viewer**, and the weekly
+figures must live on a tab named `Business Working Account` in the layout
+below. A bad link is rejected without disturbing a working connection.
+
+The connection is remembered in `localStorage` and, if the `clients` UPDATE
+policy is applied, written back to the signed-in account so it follows the
+user to another browser. **Disconnect** clears both.
+
+For an ordinary sheet link the dashboard reads the `gviz` endpoint rather
+than the published CSV, because published CSV is CDN-cached and would defeat
+5-second polling.
+
+> **Netlify usage note.** Polling every 5 seconds is roughly 720 function
+> invocations per hour per open dashboard. Polling pauses automatically while
+> the browser tab is hidden, but a dashboard left open all day on the free
+> tier will approach the monthly invocation limit. The Apps Script bridge
+> avoids this entirely — it pushes over a websocket and does not poll.
 
 ## Repository layout
 
@@ -164,6 +194,8 @@ node tests/server.js &        # static server + mock sheet endpoint
 node tests/e2e.js             # happy path, incl. a simulated realtime push
 node tests/e2e.js --no-chart  # same, with the Chart.js CDN blocked
 node tests/degraded.js        # CDN failures, RLS denial, unlinked account
+node tests/connect.js         # Connect tab, validation, 5s update loop
+node tests/url-test.js        # URL parsing (no browser needed)
 ```
 
 ---

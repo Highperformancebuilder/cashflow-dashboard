@@ -55,6 +55,17 @@ create policy "clients: read own row"
   to authenticated
   using ( lower(email) = lower(auth.jwt() ->> 'email') );
 
+-- The Connect tab writes the chosen sheet back to the user's own row so the
+-- connection follows them to another browser. Scoped to their own row only,
+-- and with check prevents re-pointing the row at somebody else's email.
+drop policy if exists "clients: update own row" on public.clients;
+create policy "clients: update own row"
+  on public.clients
+  for update
+  to authenticated
+  using      ( lower(email) = lower(auth.jwt() ->> 'email') )
+  with check ( lower(email) = lower(auth.jwt() ->> 'email') );
+
 drop policy if exists "snapshots: read own sheet" on public.sheet_snapshots;
 create policy "snapshots: read own sheet"
   on public.sheet_snapshots

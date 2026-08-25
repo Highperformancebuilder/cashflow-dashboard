@@ -1,0 +1,78 @@
+Greg Jones Cashflow Dashboard — Realtime Sync + Connect Tab
+===========================================================
+
+WHAT THIS IS
+------------
+The complete, final version of every file that changed. Not a patch — just
+copy these over your repo. Works whatever state your working tree is in.
+
+If you are still stuck mid-patch from earlier, clear it first:
+
+    git am --abort
+
+
+HOW TO APPLY
+------------
+1. Unzip into the ROOT of your cloned repo, preserving folders.
+   It should overwrite index.html and add the rest.
+
+2. Check what changed:
+
+       git status
+       git diff --stat
+
+   Expect: index.html modified, plus these new files:
+       README.md
+       apps-script/Code.gs
+       netlify.toml
+       netlify/functions/sheet.js
+       supabase/schema.sql
+       tests/*.js
+
+3. Commit and push:
+
+       git add -A
+       git commit -m "Add realtime Google Sheets sync and a Connect tab"
+       git push -u origin claude/client-files-review-g1ngpj
+
+   (Delete APPLY.txt first if you don't want it in the repo.)
+
+
+FILES
+-----
+index.html                  The dashboard. Adds the Connect tab and the live
+                            sync layer. REPLACES your current file.
+apps-script/Code.gs         Paste into the spreadsheet's Apps Script project.
+                            Parses the sheet and pushes to Supabase on edit.
+netlify/functions/sheet.js  CORS proxy for Google. Host-allowlisted.
+netlify.toml                Netlify build + functions config.
+supabase/schema.sql         Tables, RLS policies, Realtime publication.
+README.md                   Full setup instructions.
+tests/                      Browser + unit tests (need Playwright).
+
+
+BEFORE IT WORKS IN PRODUCTION
+-----------------------------
+1. Run supabase/schema.sql in the Supabase SQL editor.
+   RLS is currently OFF. Until you run this, the publishable key in
+   index.html lets any visitor read every client email and sheet id.
+   Re-run it even if you ran an earlier version — it adds the clients
+   UPDATE policy the Connect tab needs.
+
+2. Deploy to Netlify. Without netlify/functions/sheet.js deployed, the
+   dashboard cannot read Google Sheets at all (browser CORS blocks it).
+
+3. Open the Connect tab, paste your spreadsheet link, click Connect.
+   The sheet must be shared: Anyone with the link -> Viewer.
+
+Optional, for instant updates instead of 5-second polling: install the
+Apps Script bridge (README step 2) and paste its /exec URL into Connect.
+
+
+UPDATE SPEED
+------------
+Pasted sheet link      ~5 seconds (polling, pauses when tab is hidden)
+Apps Script /exec URL  instant (Supabase Realtime websocket)
+
+Note: 5s polling is ~720 Netlify function calls per hour per open
+dashboard. The Apps Script bridge does not poll.

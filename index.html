@@ -21,6 +21,16 @@
 #logout-btn{background:none;border:1px solid #315150;color:#d0dbd6;border-radius:5px;padding:6px 14px;font-size:9px;letter-spacing:1px;text-transform:uppercase;cursor:pointer;font-family:'Manrope',sans-serif;}
 #logout-btn:hover{border-color:#ccf492;color:#ccf492;}
 #dashboard-wrap{display:none;}
+#connect-url{width:100%;background:#000;border:1px solid #315150;border-radius:6px;padding:12px 14px;color:#d0dbd6;font-family:'Manrope',sans-serif;font-size:13px;outline:none;box-sizing:border-box;}
+#connect-url:focus{border-color:#ccf492;}
+#connect-url::placeholder{color:#315150;}
+.cbtn{background:#ccf492;border:none;border-radius:6px;padding:12px 22px;color:#000;font-family:'Manrope',sans-serif;font-size:10px;font-weight:800;letter-spacing:2px;text-transform:uppercase;cursor:pointer;white-space:nowrap;}
+.cbtn:hover{background:#b8e07a;}
+.cbtn:disabled{opacity:.5;cursor:not-allowed;}
+.cbtn.ghost{background:none;border:1px solid #315150;color:#d0dbd6;}
+.cbtn.ghost:hover{border-color:#ef4444;color:#ef4444;background:none;}
+.chelp{font-size:10px;color:#d0dbd6;opacity:.55;line-height:1.8;}
+.chelp code{background:#000;border:1px solid rgba(49,81,80,.4);border-radius:3px;padding:1px 5px;font-size:9px;color:#ccf492;}
 #sync-badge{font-size:8px;letter-spacing:1px;color:#315150;text-transform:uppercase;padding:4px 8px;}
 </style>
 <style>
@@ -116,6 +126,7 @@ tr:hover td{background:rgba(49,81,80,.08)}
   <button class="nb" onclick="showTab('monthly',this)">FY Performance</button>
   <button class="nb" onclick="showTab('clients',this)">Clients</button>
   <button class="nb" onclick="showTab('accounts',this)">4 Accounts</button>
+  <button class="nb" onclick="showTab('connect',this)">Connect</button>
 </div>
 <div class="content">
 <div id="sync-banner"></div>
@@ -205,6 +216,40 @@ tr:hover td{background:rgba(49,81,80,.08)}
     <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#191919;border:1px solid rgba(49,81,80,.3);border-radius:6px;font-size:11px;"><span>Solar Repayments</span><span style="color:#f59e0b;font-weight:700;">Ends Feb 2027</span></div>
   </div>
 </div>
+<!-- CONNECT -->
+<div id="tab-connect" class="tab">
+  <span class="lbl">Connect a Google Sheet</span>
+  <div class="card" style="margin-bottom:14px;">
+    <div style="font-size:11px;color:#d0dbd6;opacity:.75;line-height:1.8;margin-bottom:14px;">
+      Paste the link to your cashflow spreadsheet. The dashboard reads it and keeps itself up to date as you edit.
+    </div>
+    <div style="display:flex;gap:8px;align-items:stretch;flex-wrap:wrap;">
+      <input type="url" id="connect-url" style="flex:1;min-width:260px;"
+             placeholder="https://docs.google.com/spreadsheets/d/..."
+             onkeydown="if(event.key==='Enter')connectSheet()" />
+      <button class="cbtn" id="connect-btn" onclick="connectSheet()">Connect</button>
+    </div>
+    <div id="connect-result" style="margin-top:12px;"></div>
+  </div>
+
+  <div id="connect-current"></div>
+
+  <span class="lbl">Before you connect</span>
+  <div class="card">
+    <div class="chelp">
+      <strong style="color:#d0dbd6;opacity:.9;">1. Share the sheet.</strong> In Google Sheets choose
+      <em>Share &rarr; General access &rarr; Anyone with the link &rarr; Viewer</em>.
+      Without this the dashboard cannot read it.<br><br>
+      <strong style="color:#d0dbd6;opacity:.9;">2. Check the tab name.</strong> The weekly figures are read from a tab called
+      <code>Business Working Account</code>, using row 6 for week dates, row 8 for opening balance,
+      row 76 for total receipts and row 217 for the closing balance.<br><br>
+      <strong style="color:#d0dbd6;opacity:.9;">3. Updates.</strong> Edits appear within about 5 seconds while this tab is open.
+      For instant updates, install the Apps Script bridge on the sheet (see <code>README.md</code>) and paste its
+      <code>/exec</code> link here instead — that switches the dashboard to a live websocket.
+    </div>
+  </div>
+</div>
+
 <div class="footer">
   <div style="display:flex;align-items:center;gap:8px">
     <svg width="12" height="12" viewBox="0 0 206.33 212.6"><path fill="#315150" d="M8.84,98.81v27.09l80.78-39.1v33.07c0,10.65-6.09,20.37-15.68,25.01l-38.01,18.4v-26.43l-27.09,12.78v53.86l94.33-45.66,94.33,45.66v-53.88l-27.09-12.78v26.45l-38.01-18.4c-9.59-4.64-15.68-14.35-15.68-25.01v-33.07l80.78,39.1v-27.09l-94.33-45.66L8.84,98.81Z"/><polygon fill="#315150" points="103.17 9.11 8.84 54.77 8.84 81.86 103.17 36.2 197.49 81.86 197.49 54.77 103.17 9.11"/></svg>
@@ -258,6 +303,7 @@ function showTab(n,b){
   b.classList.add('active');
   if(n==='monthly'){renderMonthly();}
   if(n==='clients'){renderClients();}
+  if(n==='connect'&&typeof renderConnect==='function'){renderConnect();}
 }
 
 
@@ -670,7 +716,7 @@ const SUPABASE_KEY = 'sb_publishable_D5P8QA2r-4FWmm3TfPpZgA_y1NSlV1W';
 
 const SHEET_PROXY      = '/.netlify/functions/sheet';
 const SNAPSHOT_TABLE   = 'sheet_snapshots';
-const POLL_INTERVAL_MS = 60000;
+const POLL_INTERVAL_MS = 5000;   // paused while the browser tab is hidden
 const SNAPSHOT_VERSION = 1;
 
 // The Supabase SDK is a CDN script. If it did not load, fail loudly on the
@@ -697,6 +743,7 @@ const sync = {
   email: null,
   sheetId: null,
   scriptUrl: null,
+  source: null,          // the connected Google Sheet / Apps Script descriptor
   channel: null,
   pollTimer: null,
   mode: 'idle',          // idle | realtime | polling | cached | error
@@ -955,6 +1002,7 @@ function applySnapshot(snap, origin) {
 
   sync.lastUpdated = snap.generatedAt || new Date().toISOString();
   setBanner(null, null);
+  if (typeof renderConnect === 'function') renderConnect();
   setStatus(sync.mode === 'realtime' ? 'realtime' : 'polling',
             (sync.mode === 'realtime' ? 'Live' : 'Polling') + ' · ' + stamp(sync.lastUpdated));
   return true;
@@ -1060,8 +1108,130 @@ function snapshotFromRows(rows) {
 }
 
 /* --------------------------------------------------------------------------
+   Data source. A source is whatever the user connected: a Google Sheet link,
+   a published CSV, or an Apps Script bridge URL.
+   -------------------------------------------------------------------------- */
+
+const SOURCE_STORAGE_KEY = 'gj_cashflow_source';
+const WORKING_SHEET_NAME = 'Business Working Account';
+
+/**
+ * Turn whatever the user pasted into a source descriptor.
+ * Accepts a sheet URL, a bare sheet id, a published-to-web CSV link, or an
+ * Apps Script /exec URL. Returns { error } for anything else.
+ */
+function parseSheetSource(raw) {
+  const s = String(raw == null ? '' : raw).trim();
+  if (!s) return { error: 'Paste a Google Sheets link first.' };
+
+  // Apps Script web app — the realtime bridge.
+  const script = s.match(/^https:\/\/script\.google\.com\/macros\/s\/([A-Za-z0-9_-]+)\/exec/);
+  if (script) {
+    return { kind: 'appsscript', url: s.split('#')[0].split('?')[0], id: script[1], label: 'Apps Script bridge' };
+  }
+
+  // Published to the web: /spreadsheets/d/e/2PACX-.../pub
+  const pub = s.match(/^https:\/\/docs\.google\.com\/spreadsheets\/d\/e\/([A-Za-z0-9_-]+)\/pub/);
+  if (pub) {
+    return { kind: 'published', url: s.split('#')[0], id: pub[1], label: 'Published CSV' };
+  }
+
+  // Ordinary spreadsheet URL.
+  const sheet = s.match(/^https:\/\/docs\.google\.com\/spreadsheets\/d\/([A-Za-z0-9_-]{20,})/);
+  if (sheet) {
+    const gidMatch = s.match(/[#&?]gid=(\d+)/);
+    return { kind: 'sheet', id: sheet[1], gid: gidMatch ? gidMatch[1] : null, label: 'Google Sheet' };
+  }
+
+  // A bare spreadsheet id.
+  if (/^[A-Za-z0-9_-]{20,}$/.test(s)) {
+    return { kind: 'sheet', id: s, gid: null, label: 'Google Sheet' };
+  }
+
+  if (/^https?:\/\//i.test(s)) {
+    return { error: 'That is not a Google Sheets or Apps Script link. Copy the URL from your browser while the spreadsheet is open.' };
+  }
+  return { error: 'That does not look like a Google Sheets link or ID.' };
+}
+
+/**
+ * The URL the proxy should fetch for a source.
+ *
+ * For an ordinary sheet this uses the gviz endpoint rather than the published
+ * CSV: published CSV is served through Google's CDN and can lag several
+ * minutes behind an edit, which would defeat the point of polling every 5s.
+ */
+function buildFetchUrl(source) {
+  if (!source) return null;
+  if (source.kind === 'appsscript') return source.url;
+
+  if (source.kind === 'published') {
+    const base = source.url.split('#')[0];
+    return base + (base.indexOf('?') >= 0 ? '&' : '?') + 'output=csv';
+  }
+
+  let url = 'https://docs.google.com/spreadsheets/d/' + source.id + '/gviz/tq?tqx=out:csv&headers=0';
+  url += source.gid ? '&gid=' + source.gid : '&sheet=' + encodeURIComponent(WORKING_SHEET_NAME);
+  return url;
+}
+
+function sourceSummary(source) {
+  if (!source) return '';
+  if (source.kind === 'appsscript') return 'Apps Script bridge · …' + source.id.slice(-8);
+  if (source.kind === 'published') return 'Published CSV · …' + source.id.slice(-8);
+  return 'Sheet ' + source.id.slice(0, 12) + '…' + (source.gid ? ' (tab ' + source.gid + ')' : '');
+}
+
+function storeSource(source) {
+  try { localStorage.setItem(SOURCE_STORAGE_KEY, JSON.stringify(source)); }
+  catch (_) { /* private browsing — the sheet just won't be remembered */ }
+}
+
+function loadStoredSource() {
+  try {
+    const raw = localStorage.getItem(SOURCE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return (parsed && parsed.kind) ? parsed : null;
+  } catch (_) { return null; }
+}
+
+function clearStoredSource() {
+  try { localStorage.removeItem(SOURCE_STORAGE_KEY); } catch (_) {}
+}
+
+/* --------------------------------------------------------------------------
    Fetching.
    -------------------------------------------------------------------------- */
+
+/** Fetch and parse one source. Throws with a human-readable message. */
+async function fetchFromSource(source) {
+  const target = buildFetchUrl(source);
+  if (!target) throw new Error('No data source is configured.');
+
+  const res = await fetch(SHEET_PROXY + '?url=' + encodeURIComponent(target), { cache: 'no-store' });
+  let body;
+  try { body = await res.json(); }
+  catch (_) { throw new Error('The sync service returned an unreadable response.'); }
+
+  if (!res.ok) {
+    const detail = body && body.error ? body.error : 'the sync service returned ' + res.status;
+    if (res.status === 502 && source.kind === 'sheet') {
+      throw new Error('Could not read that sheet (' + detail + '). Check it is shared as "Anyone with the link can view".');
+    }
+    throw new Error(detail);
+  }
+
+  if (body.kind === 'snapshot') return body.snapshot;
+  if (body.kind === 'rows') {
+    const snap = snapshotFromRows(body.rows);
+    if (!snap.weekly.length) {
+      throw new Error('That sheet has no week dates on row 6 of the "' + WORKING_SHEET_NAME + '" tab. Check the tab name and layout.');
+    }
+    return snap;
+  }
+  throw new Error('The sync service returned an unrecognised payload.');
+}
 
 async function fetchSnapshot() {
   // 1. The Supabase snapshot row — written by Apps Script, RLS-guarded.
@@ -1074,17 +1244,9 @@ async function fetchSnapshot() {
     if (!error && data && data.payload) return { snapshot: data.payload, via: 'supabase' };
   }
 
-  // 2. Apps Script / published CSV, proxied to get around CORS.
-  if (sync.scriptUrl) {
-    const res = await fetch(SHEET_PROXY + '?url=' + encodeURIComponent(sync.scriptUrl), { cache: 'no-store' });
-    let body;
-    try { body = await res.json(); }
-    catch (_) { throw new Error('The sync service returned an unreadable response.'); }
-
-    if (!res.ok) throw new Error(body && body.error ? body.error : 'Sync service returned ' + res.status);
-    if (body.kind === 'snapshot') return { snapshot: body.snapshot, via: 'apps-script' };
-    if (body.kind === 'rows') return { snapshot: snapshotFromRows(body.rows), via: 'csv' };
-    throw new Error('The sync service returned an unrecognised payload.');
+  // 2. The connected source, proxied to get around CORS.
+  if (sync.source) {
+    return { snapshot: await fetchFromSource(sync.source), via: sync.source.kind };
   }
 
   return null;
@@ -1138,6 +1300,7 @@ function startRealtime() {
         sync.mode = 'realtime';
         stopPolling();
         setStatus('realtime', 'Live · ' + (sync.lastUpdated ? stamp(sync.lastUpdated) : stamp()));
+        renderConnect();
       } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
         // Websocket unavailable — degrade to polling rather than going stale.
         startPolling();
@@ -1173,6 +1336,126 @@ document.addEventListener('visibilitychange', function () {
     startPolling();
   }
 });
+
+/* --------------------------------------------------------------------------
+   Connect tab.
+   -------------------------------------------------------------------------- */
+
+function showConnectResult(kind, message) {
+  const el = document.getElementById('connect-result');
+  if (!el) return;
+  if (!message) { el.innerHTML = ''; return; }
+  const cls = kind === 'error' ? 'alert' : kind === 'ok' ? 'good' : 'warn';
+  el.innerHTML = '<div class="' + cls + '" style="margin:0;">' + message + '</div>';
+}
+
+/** Render the "currently connected" panel. */
+function renderConnect() {
+  const el = document.getElementById('connect-current');
+  if (!el) return;
+
+  if (!sync.source) {
+    el.innerHTML = '';
+    return;
+  }
+
+  const modeLabel = sync.mode === 'realtime'
+    ? '<span style="color:#ccf492;">Live websocket — updates instantly</span>'
+    : '<span style="color:#f59e0b;">Polling every 5 seconds</span>';
+
+  let html = '<span class="lbl">Currently Connected</span>';
+  html += '<div class="card clime" style="margin-bottom:14px;">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">';
+  html += '<div style="min-width:0;flex:1;">';
+  html += '<div style="font-size:12px;font-weight:700;color:#ccf492;margin-bottom:4px;">' + sync.source.label + '</div>';
+  html += '<div style="font-size:10px;color:#d0dbd6;opacity:.6;word-break:break-all;margin-bottom:6px;">' + sourceSummary(sync.source) + '</div>';
+  html += '<div style="font-size:10px;">' + modeLabel + '</div>';
+  if (sync.lastUpdated) {
+    html += '<div style="font-size:10px;color:#d0dbd6;opacity:.5;margin-top:4px;">Last update ' + stamp(sync.lastUpdated) + ' · ' + WEEKLY.length + ' weeks loaded</div>';
+  }
+  html += '</div>';
+  html += '<button class="cbtn ghost" onclick="disconnectSheet()">Disconnect</button>';
+  html += '</div></div>';
+  el.innerHTML = html;
+}
+
+/** Validate, adopt and start syncing whatever was pasted. */
+async function connectSheet() {
+  const input = document.getElementById('connect-url');
+  const btn = document.getElementById('connect-btn');
+  const parsed = parseSheetSource(input.value);
+
+  if (parsed.error) { showConnectResult('error', '⚠ ' + parsed.error); return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Connecting…';
+  showConnectResult('busy', '◌ Reading the spreadsheet…');
+
+  try {
+    // Prove the source works before adopting it, so a bad link never
+    // replaces a working connection.
+    const snapshot = await fetchFromSource(parsed);
+    const problem = validateSnapshot(snapshot);
+    if (problem) throw new Error(problem);
+
+    stopRealtime();
+    stopPolling();
+
+    sync.source = parsed;
+    sync.sheetId = (parsed.kind === 'sheet') ? parsed.id : null;
+    sync.mode = 'polling';
+    storeSource(parsed);
+    persistSourceToAccount(parsed);
+
+    applySnapshot(snapshot, 'connect');
+    startRealtime();
+    startPolling();
+
+    const current = WEEKLY[CW_IDX];
+    showConnectResult('ok', '✓ Connected. Found <strong>' + WEEKLY.length + ' weeks</strong>' +
+      (current ? ', current week <strong>' + current.label + '</strong>' : '') +
+      '. The dashboard updates as you edit the sheet.');
+    input.value = '';
+    renderConnect();
+  } catch (err) {
+    showConnectResult('error', '⚠ ' + (err && err.message ? err.message : err));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Connect';
+  }
+}
+
+function disconnectSheet() {
+  stopRealtime();
+  stopPolling();
+  sync.source = null;
+  sync.sheetId = null;
+  sync.lastUpdated = null;
+  clearStoredSource();
+  persistSourceToAccount(null);
+  setStatus('cached', 'Not connected');
+  setBanner('warn', '⚡ No spreadsheet is connected, so the figures below are sample data. Use the Connect tab to link your sheet.');
+  showConnectResult('busy', 'Disconnected. Paste a link above to connect a different sheet.');
+  renderConnect();
+}
+
+/**
+ * Best-effort write of the connection back to the signed-in account, so it
+ * follows the user to another browser. Requires the clients UPDATE policy in
+ * supabase/schema.sql; failure here is not fatal because localStorage already
+ * holds the connection.
+ */
+async function persistSourceToAccount(source) {
+  if (!sb || !sync.email) return;
+  try {
+    await sb.from('clients').update({
+      sheet_id: source && source.kind === 'sheet' ? source.id : null,
+      script_url: source && source.kind !== 'sheet' ? source.url : null
+    }).eq('email', sync.email);
+  } catch (err) {
+    console.warn('[connect] could not save the connection to your account', err);
+  }
+}
 
 /* --------------------------------------------------------------------------
    Authentication.
@@ -1237,19 +1520,31 @@ async function launchDashboard(email) {
     return;
   }
 
-  if (!record || !record.sheet_id) {
-    setStatus('cached', 'No sheet linked');
-    setBanner('warn', '⚡ No spreadsheet is linked to <strong>' + email + '</strong> yet, so the figures below are sample data. Contact your administrator to connect your sheet.');
+  // Prefer the sheet linked to the account; fall back to one connected in this
+  // browser via the Connect tab.
+  let source = null;
+  if (record && record.script_url) {
+    source = parseSheetSource(record.script_url);
+  } else if (record && record.sheet_id) {
+    source = { kind: 'sheet', id: record.sheet_id, gid: null, label: 'Google Sheet' };
+  }
+  if (!source || source.error) source = loadStoredSource();
+
+  if (!source) {
+    setStatus('cached', 'Not connected');
+    setBanner('warn', '⚡ No spreadsheet is connected yet, so the figures below are sample data. Open the <strong>Connect</strong> tab to link your Google Sheet.');
+    renderConnect();
     return;
   }
 
-  sync.sheetId = record.sheet_id;
-  sync.scriptUrl = record.script_url || null;
+  sync.source = source;
+  sync.sheetId = (source.kind === 'sheet') ? source.id : (record ? record.sheet_id : null);
 
   await refreshFromSource(true);
   startRealtime();
   // Realtime confirms asynchronously; poll until it does, then stopPolling().
   startPolling();
+  renderConnect();
 }
 
 async function handleLogout() {
@@ -1258,6 +1553,7 @@ async function handleLogout() {
   sync.email = null;
   sync.sheetId = null;
   sync.scriptUrl = null;
+  sync.source = null;
   sync.lastUpdated = null;
 
   await sb.auth.signOut();
