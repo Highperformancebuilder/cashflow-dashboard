@@ -20,7 +20,9 @@ eval([
   pick(/const CSV_ROW = \{[^}]*\};/),
   pick(/const ROW_OFFSET = \{[\s\S]*?\};/),
   grab('csvNum'), grab('csvDate'),
-  grab('findWeekDateRow'), grab('snapshotFromRows'),
+  pick(/const ROW_LABELS = \[[\s\S]*?\n\];/),
+  grab('findLabelledRows'),
+  grab('findWeekDateRow'), grab('weekHasData'), grab('pickCurrentWeek'), grab('snapshotFromRows'),
   grab('candidateUrls'), grab('describeEndpoint')
 ].join('\n'));
 
@@ -50,8 +52,33 @@ function buildRealisticGrid({ leadingBlankRows = 0, firstDataCol = 131, weeks = 
   put(76, rec); put(98, sup); put(215, out); put(217, close);
   // Row 3 carries "End of FY25" text, as in the real sheet.
   g[2 + leadingBlankRows][firstDataCol - 1] = 'End of FY25';
-  g[5 + leadingBlankRows][1] = 'Week Commencing';
+  // Column B labels, exactly as they appear in the spreadsheet.
+  const label = (rowNum, text) => { g[rowNum - 1 + leadingBlankRows][1] = text; };
+  label(6,   'Week Commencing');
+  label(8,   'Opening Bank Balance');
+  label(65,  'Total Sales');
+  label(74,  'Total Other Income');
+  label(76,  'Total Receipts');
+  label(98,  'Total Supplier Payments');
+  label(215, 'Total Payments Out');
+  label(217, 'Closing Bank Balance');
   return g;
+}
+
+/**
+ * Reproduce the reported symptom: rows shifted so offset arithmetic lands on
+ * the wrong ones. Sales happens to hit a populated row; receipts and payments
+ * do not — which is exactly "Total Sales $486,322 but Total In $0".
+ */
+function buildShiftedGrid(shift) {
+  const g = buildRealisticGrid();
+  const blank = () => Array(g[0].length).fill('');
+  // Extra rows inserted between the week row and the totals below it.
+  const head = g.slice(0, 20);
+  const tail = g.slice(20);
+  const inserted = [];
+  for (let i = 0; i < shift; i++) inserted.push(blank());
+  return head.concat(inserted, tail);
 }
 
 // --- the layout exactly as it is in the real sheet -------------------------
@@ -88,7 +115,61 @@ t('bare numbers are not mistaken for dates', findWeekDateRow(wrongTab) === -1, S
 t('empty grid yields no weeks', snapshotFromRows([]).weekly.length === 0);
 t('single row yields no weeks', snapshotFromRows([['a','b']]).weekly.length === 0);
 
-// --- URL candidates: the actual bug ---------------------------------------
+// --- THE REPORTED SYMPTOM: rows shifted below the week row ----------------
+// Offsets alone put sales on a populated row and receipts on an empty one.
+for (const shift of [1, 3, 7, 12]) {
+  const shifted = buildShiftedGrid(shift);
+  const s3 = snapshotFromRows(shifted);
+  const anyIn = s3.weekly.some(w => w.total_in !== 0);
+  const anyOut = s3.weekly.some(w => w.total_out !== 0);
+  const anyOpen = s3.weekly.some(w => w.opening !== 0);
+  t('rows shifted by ' + shift + ': receipts still found', anyIn, 'weeks=' + s3.weekly.length);
+  t('rows shifted by ' + shift + ': payments still found', anyOut);
+  t('rows shifted by ' + shift + ': opening still found', anyOpen);
+}
+
+// --- every row resolved by label, not guesswork ---------------------------
+const mapped = snapshotFromRows(buildRealisticGrid());
+const byLabel = Object.keys(mapped.rowMap).filter(k => mapped.rowMap[k].by === 'label');
+t('all 7 figure rows matched by label', byLabel.length === 7, JSON.stringify(mapped.rowMap));
+t('receipts resolved to row 76', mapped.rowMap.receipts.row === 76, JSON.stringify(mapped.rowMap.receipts));
+t('payments out resolved to row 215', mapped.rowMap.paymentsOut.row === 215, JSON.stringify(mapped.rowMap.paymentsOut));
+t('closing resolved to row 217', mapped.rowMap.closing.row === 217, JSON.stringify(mapped.rowMap.closing));
+
+// A sheet with no labels must still work, via offsets, and say it guessed.
+const unlabelled = buildRealisticGrid();
+unlabelled.forEach(r => { if (typeof r[1] === 'string' && r[1] !== 'Week Commencing') r[1] = ''; });
+const guessedSnap = snapshotFromRows(unlabelled);
+t('unlabelled sheet still parses via offsets', guessedSnap.weekly.length === 20, 'weeks=' + guessedSnap.weekly.length);
+t('and reports that rows were guessed',
+  Object.keys(guessedSnap.rowMap).some(k => guessedSnap.rowMap[k].by === 'offset'), JSON.stringify(guessedSnap.rowMap));
+
+// --- opening on the LATEST POPULATED week, not an empty current week ------
+function gridWithTrailingBlanks(populatedWeeks, blankWeeks) {
+  const g = buildRealisticGrid({ weeks: populatedWeeks + blankWeeks });
+  // Wipe the figures for the trailing weeks, keeping their dates.
+  const firstDataCol = 131;
+  [8, 65, 74, 76, 98, 215, 217].forEach(rowNum => {
+    for (let i = populatedWeeks; i < populatedWeeks + blankWeeks; i++) g[rowNum - 1][firstDataCol + i] = '';
+  });
+  return g;
+}
+const trailing = snapshotFromRows(gridWithTrailingBlanks(10, 10));
+t('opens on the last week WITH figures, not an empty one',
+  trailing.currentWeekIdx === 9, 'idx=' + trailing.currentWeekIdx);
+t('that week actually has figures', weekHasData(trailing.weekly[trailing.currentWeekIdx]),
+  JSON.stringify(trailing.weekly[trailing.currentWeekIdx]));
+
+// pickCurrentWeek in isolation
+const mk = (iso, io_) => ({ iso, total_in: io_, total_out: 0, opening: 0, closing: 0, sales: 0 });
+t('all-empty weeks fall back to the last past week',
+  pickCurrentWeek([mk('2025-01-01',0), mk('2025-01-08',0)], '2030-01-01') === 1);
+t('future-only data still selects a populated week',
+  pickCurrentWeek([mk('2030-01-01',500)], '2020-01-01') === 0);
+t('prefers a past populated week over a future one',
+  pickCurrentWeek([mk('2020-01-01',100), mk('2030-01-01',900)], '2025-01-01') === 0);
+
+// --- URL candidates: the earlier bug --------------------------------------
 const ID = '1MXTCOStUpHpGYrthqRb8NCuERbUIeyZcRZVvdG4P15c';
 const withGid = candidateUrls({ kind: 'sheet', id: ID, gid: '457366843' });
 t('a gid no longer suppresses the tab name', withGid[0].includes('sheet=Business%20Working%20Account'), withGid[0]);

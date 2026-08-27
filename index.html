@@ -149,7 +149,7 @@ tr:hover td{background:rgba(49,81,80,.08)}
     <div class="stat"><div class="bn" style="color:#3b82f6" id="ov-in"></div><div class="sl">Cash In</div><div class="ss">Total receipts</div></div>
     <div class="stat"><div class="bn" style="color:#f59e0b" id="ov-out"></div><div class="sl">Cash Out</div><div class="ss">Total Payments Out</div></div>
   </div>
-  <span class="lbl">Year to Date — FY2026 (1 Jul 2025 – 30 Jun 2026)</span>
+  <span class="lbl" id="ytd-heading">Year to Date — FY2026 (1 Jul 2025 – 30 Jun 2026)</span>
   <div class="g3">
     <div class="stat"><div class="mn" style="color:#ccf492" id="ytd-sales"></div><div class="sl">Total Sales</div><div class="ss">FY26 to date</div></div>
     <div class="stat"><div class="mn" style="color:#3b82f6" id="ytd-in"></div><div class="sl">Total In</div><div class="ss">FY26 to date</div></div>
@@ -744,6 +744,9 @@ const sync = {
   sheetId: null,
   scriptUrl: null,
   source: null,          // the connected Google Sheet / Apps Script descriptor
+  rowMap: null,          // which sheet row each figure was read from
+  tabStatus: null,       // which account tabs were read successfully
+  lastSecondaryAt: 0,    // when the secondary account tabs were last read
   channel: null,
   pollTimer: null,
   mode: 'idle',          // idle | realtime | polling | cached | error
@@ -808,8 +811,19 @@ const ACCOUNT_META = {
 };
 
 const ACCOUNT_ORDER = ['working', 'regulation', 'savings', 'profit'];
+const ACCOUNT_TAB_NAMES = {
+  working: 'Business Working Account',
+  regulation: 'Regulation Bank Account',
+  savings: 'Business Savings Account',
+  profit: 'Profit Reinvest. Bank Account'
+};
 
 let ACCOUNTS_LIVE = JSON.parse(JSON.stringify(ACCOUNT_FALLBACK));
+
+// Which accounts came from the live sheet. Anything not in here is sample
+// data, and must be labelled as such — a placeholder balance that looks real
+// is worse on a cashflow dashboard than an obvious blank.
+let ACCOUNTS_LIVE_KEYS = {};
 
 function renderAccounts() {
   const grid = document.getElementById('accounts-grid');
@@ -827,13 +841,23 @@ function renderAccounts() {
     html += '<div style="font-size:11px;font-weight:700;color:' + meta.color + ';text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">' + (a.label || meta.label) + '</div>';
     html += '<div style="font-size:10px;color:#d0dbd6;opacity:.6;margin-bottom:10px;">' + meta.sub + '</div>';
 
+    const isLive = !sync.source || ACCOUNTS_LIVE_KEYS[key];
+    const money = function (v) {
+      return isLive
+        ? '<span style="color:' + meta.color + ';font-weight:800;font-size:15px;">' + fmtK(v || 0) + '</span>'
+        : '<span style="color:#d0dbd6;opacity:.35;font-weight:800;font-size:15px;">—</span>';
+    };
+
     html += '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;">';
-    html += '<span style="color:#d0dbd6;opacity:.5;">Opening</span>';
-    html += '<span style="color:' + meta.color + ';font-weight:800;font-size:15px;">' + fmtK(a.opening || 0) + '</span></div>';
+    html += '<span style="color:#d0dbd6;opacity:.5;">Opening</span>' + money(a.opening) + '</div>';
 
     html += '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:10px;">';
-    html += '<span style="color:#d0dbd6;opacity:.5;">Closing</span>';
-    html += '<span style="color:' + meta.color + ';font-weight:800;font-size:15px;">' + fmtK(a.closing || 0) + '</span></div>';
+    html += '<span style="color:#d0dbd6;opacity:.5;">Closing</span>' + money(a.closing) + '</div>';
+
+    if (!isLive) {
+      html += '<div style="font-size:9px;color:#f59e0b;opacity:.85;line-height:1.5;margin-bottom:8px;">' +
+              'Not read from the sheet — check the <strong>' + ACCOUNT_TAB_NAMES[key] + '</strong> tab exists.</div>';
+    }
 
     html += '<div style="padding-top:8px;border-top:1px solid rgba(49,81,80,.3);">';
     if (key === 'working') {
@@ -859,12 +883,23 @@ function renderAccounts() {
   if (totalEl) {
     let total = 0;
     let breakdown = '';
+    let missing = 0;
     ACCOUNT_ORDER.forEach(function (key) {
       const a = ACCOUNTS_LIVE[key] || ACCOUNT_FALLBACK[key];
       if (!a) return;
-      total += (a.closing || 0);
-      breakdown += (a.label || key) + ' ' + fmtK(a.closing || 0) + '<br>';
+      const isLive = !sync.source || ACCOUNTS_LIVE_KEYS[key];
+      if (isLive) {
+        total += (a.closing || 0);
+        breakdown += (a.label || key) + ' ' + fmtK(a.closing || 0) + '<br>';
+      } else {
+        missing++;
+        breakdown += '<span style="opacity:.5;">' + (a.label || key) + ' —</span><br>';
+      }
     });
+    if (missing) {
+      breakdown += '<span style="color:#f59e0b;opacity:.8;">' + missing + ' account' +
+                   (missing === 1 ? '' : 's') + ' not read</span>';
+    }
 
     let t = '<div class="card clime" style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;">';
     t += '<div><div style="font-size:9px;color:#d0dbd6;opacity:.6;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Total Across All Accounts</div>';
@@ -913,19 +948,40 @@ function rebuildDerived() {
 
   // --- YTD, cumulative from the start of the current FY through this week ---
   const current = WEEKLY[CW_IDX];
-  if (current) {
-    const fy = fyEndYear(current.iso);
-    let sales = 0, cashIn = 0, cashOut = 0;
+  if (!current) return;
+
+  const totalsFor = function (fy) {
+    let sales = 0, cashIn = 0, cashOut = 0, weeks = 0;
     WEEKLY.forEach(function (w) {
       if (w.iso > current.iso) return;          // future weeks are projections
-      if (fyEndYear(w.iso) !== fy) return;      // prior financial years
+      if (fyEndYear(w.iso) !== fy) return;      // other financial years
       sales   += (w.sales || 0);
       cashIn  += (w.total_in || 0);
       cashOut += (w.total_out || 0);
+      if (weekHasData(w)) weeks++;
     });
-    YTD.sales = Math.round(sales);
-    YTD.in    = Math.round(cashIn);
-    YTD.out   = Math.round(cashOut);
+    return { fy: fy, sales: sales, in: cashIn, out: cashOut, weeks: weeks };
+  };
+
+  let totals = totalsFor(fyEndYear(current.iso));
+
+  // If the current financial year holds nothing, show the most recent one that
+  // does rather than a row of zeros.
+  if (totals.weeks === 0) {
+    const years = {};
+    WEEKLY.forEach(function (w) { if (weekHasData(w)) years[fyEndYear(w.iso)] = true; });
+    const withData = Object.keys(years).map(Number).sort(function (a, b) { return b - a; });
+    if (withData.length) totals = totalsFor(withData[0]);
+  }
+
+  YTD.sales = Math.round(totals.sales);
+  YTD.in    = Math.round(totals.in);
+  YTD.out   = Math.round(totals.out);
+
+  const heading = document.getElementById('ytd-heading');
+  if (heading) {
+    heading.textContent = 'Year to Date — FY' + totals.fy +
+      ' (1 Jul ' + (totals.fy - 1) + ' – 30 Jun ' + totals.fy + ')';
   }
 }
 
@@ -993,13 +1049,16 @@ function applySnapshot(snap, origin) {
     ACCOUNT_ORDER.forEach(function (key) {
       if (snap.accounts[key]) {
         ACCOUNTS_LIVE[key] = Object.assign({}, ACCOUNT_FALLBACK[key], snap.accounts[key]);
+        ACCOUNTS_LIVE_KEYS[key] = true;
       }
     });
   }
+  sync.tabStatus = snap.tabStatus || sync.tabStatus;
 
   rebuildDerived();
   renderAll();
 
+  sync.rowMap = snap.rowMap || null;
   sync.lastUpdated = snap.generatedAt || new Date().toISOString();
   setBanner(null, null);
   if (typeof renderConnect === 'function') renderConnect();
@@ -1027,6 +1086,43 @@ const ROW_OFFSET = {
   paymentsOut: CSV_ROW.paymentsOut - CSV_ROW.weekDates,
   closing:     CSV_ROW.closing     - CSV_ROW.weekDates
 };
+
+/**
+ * The spreadsheet labels every row we need in its left-hand columns. Matching
+ * on those labels is far more robust than counting rows: it survives inserted
+ * or deleted rows, and CSV endpoints that drop blank rows.
+ */
+const ROW_LABELS = [
+  { key: 'weekDates',   re: /^week\s*commencing/i },
+  { key: 'opening',     re: /^opening\s*bank\s*balance/i },
+  { key: 'sales',       re: /^total\s*sales/i },
+  { key: 'otherIncome', re: /^total\s*other\s*income/i },
+  { key: 'receipts',    re: /^total\s*receipts/i },
+  { key: 'supplier',    re: /^total\s*supplier\s*payments/i },
+  { key: 'paymentsOut', re: /^total\s*payments\s*out/i },
+  { key: 'closing',     re: /^closing\s*bank\s*balance/i }
+];
+
+/** Map each known label to its 0-based row index. First match wins. */
+function findLabelledRows(rows) {
+  const found = {};
+  for (let r = 0; r < rows.length; r++) {
+    const row = rows[r] || [];
+    // Labels live in the first few columns, well left of the week data.
+    const scan = Math.min(row.length, 5);
+    for (let c = 0; c < scan; c++) {
+      const cell = row[c];
+      if (typeof cell !== 'string') continue;
+      const text = cell.trim();
+      if (!text) continue;
+      for (let i = 0; i < ROW_LABELS.length; i++) {
+        const spec = ROW_LABELS[i];
+        if (found[spec.key] === undefined && spec.re.test(text)) found[spec.key] = r;
+      }
+    }
+  }
+  return found;
+}
 
 /**
  * Find the row carrying the week dates. Returns a 0-based index, or -1.
@@ -1088,22 +1184,32 @@ function csvDate(v) {
 }
 
 function snapshotFromRows(rows) {
-  const dateRow = findWeekDateRow(rows);
+  const labelled = findLabelledRows(rows);
+
+  // Prefer the labelled week row; fall back to sniffing for dates.
+  const dateRow = (labelled.weekDates !== undefined) ? labelled.weekDates : findWeekDateRow(rows);
   if (dateRow < 0) {
     const snap = { version: SNAPSHOT_VERSION, weekly: [], accounts: {} };
-    snap.diagnostic = 'received ' + rows.length + ' rows; no row in the first 40 held 5 or more dates';
+    snap.diagnostic = 'received ' + rows.length + ' rows; found no "Week Commencing" label and no row holding 5 or more dates';
     return snap;
   }
 
-  const row = function (offset) { return rows[dateRow + offset] || []; };
-  const dates = row(0);
-  const opening = row(ROW_OFFSET.opening);
-  const sales = row(ROW_OFFSET.sales);
-  const otherIn = row(ROW_OFFSET.otherIncome);
-  const receipts = row(ROW_OFFSET.receipts);
-  const supplier = row(ROW_OFFSET.supplier);
-  const paymentsOut = row(ROW_OFFSET.paymentsOut);
-  const closing = row(ROW_OFFSET.closing);
+  // Each row: by label if the sheet named it, else by offset from the week row.
+  const resolved = {};
+  const row = function (key, offset) {
+    const idx = (labelled[key] !== undefined) ? labelled[key] : dateRow + offset;
+    resolved[key] = { row: idx + 1, by: (labelled[key] !== undefined) ? 'label' : 'offset' };
+    return rows[idx] || [];
+  };
+
+  const dates = rows[dateRow] || [];
+  const opening = row('opening', ROW_OFFSET.opening);
+  const sales = row('sales', ROW_OFFSET.sales);
+  const otherIn = row('otherIncome', ROW_OFFSET.otherIncome);
+  const receipts = row('receipts', ROW_OFFSET.receipts);
+  const supplier = row('supplier', ROW_OFFSET.supplier);
+  const paymentsOut = row('paymentsOut', ROW_OFFSET.paymentsOut);
+  const closing = row('closing', ROW_OFFSET.closing);
 
   const weekly = [];
   for (let col = 0; col < dates.length; col++) {
@@ -1135,19 +1241,96 @@ function snapshotFromRows(rows) {
   }
 
   const todayIso = new Date().toISOString().slice(0, 10);
-  let currentIdx = 0;
-  weekly.forEach(function (w, i) { if (w.iso <= todayIso) currentIdx = i; });
-
+  const currentIdx = pickCurrentWeek(weekly, todayIso);
   const cw = weekly[currentIdx];
+
   return {
     version: SNAPSHOT_VERSION,
     generatedAt: new Date().toISOString(),
     currentWeekIso: cw ? cw.iso : null,
     currentWeekIdx: currentIdx,
     weekly: weekly,
+    rowMap: resolved,
     // CSV export covers the Working Account only; leave the rest to fallbacks.
     accounts: cw ? { working: { label: 'Working Account', opening: cw.opening, closing: cw.closing } } : {}
   };
+}
+
+/**
+ * Read opening and closing balances from a secondary account tab.
+ * These tabs share the row labels but not the column layout, so the column is
+ * located by matching the week date, falling back to the last populated one.
+ */
+function accountFromRows(rows, currentIso) {
+  const labelled = findLabelledRows(rows);
+  const dateRow = (labelled.weekDates !== undefined) ? labelled.weekDates : findWeekDateRow(rows);
+
+  const openingRow = (labelled.opening !== undefined) ? rows[labelled.opening]
+                   : (dateRow >= 0 ? rows[dateRow + ROW_OFFSET.opening] : null);
+  const closingRow = (labelled.closing !== undefined) ? rows[labelled.closing]
+                   : (dateRow >= 0 ? rows[dateRow + ROW_OFFSET.closing] : null);
+  if (!openingRow && !closingRow) return null;
+
+  let col = -1;
+
+  // Match the week the dashboard is showing.
+  if (dateRow >= 0 && currentIso) {
+    const dates = rows[dateRow] || [];
+    for (let c = 0; c < dates.length; c++) {
+      const d = csvDate(dates[c]);
+      if (d && d.toISOString().slice(0, 10) === currentIso) { col = c; break; }
+    }
+  }
+
+  // Otherwise the rightmost column carrying a balance.
+  if (col < 0 && closingRow) {
+    for (let c = closingRow.length - 1; c >= 0; c--) {
+      const v = closingRow[c];
+      if (v !== '' && v !== null && v !== undefined && csvNum(v) !== 0) { col = c; break; }
+    }
+  }
+  if (col < 0) return null;
+
+  return {
+    opening: openingRow ? csvNum(openingRow[col]) : 0,
+    closing: closingRow ? csvNum(closingRow[col]) : 0,
+    matchedWeek: col >= 0 && dateRow >= 0 && rows[dateRow] ? String(rows[dateRow][col] || '') : ''
+  };
+}
+
+/** A week is "populated" if any of its money columns carry a figure. */
+function weekHasData(w) {
+  return !!w && ((w.total_in || 0) !== 0 || (w.total_out || 0) !== 0 ||
+                 (w.opening || 0) !== 0 || (w.closing || 0) !== 0 || (w.sales || 0) !== 0);
+}
+
+/**
+ * Choose the week to open on.
+ *
+ * Landing on "the week containing today" shows an empty dashboard whenever
+ * the sheet has not been filled in that far, which is the common case. Prefer
+ * the most recent week that actually carries figures, so the dashboard opens
+ * on real data rather than a column of zeros.
+ */
+function pickCurrentWeek(weekly, todayIso) {
+  if (!weekly.length) return 0;
+
+  let lastUpToToday = 0;
+  let lastPopulatedUpToToday = -1;
+  let lastPopulated = -1;
+
+  weekly.forEach(function (w, i) {
+    const past = w.iso <= todayIso;
+    if (past) lastUpToToday = i;
+    if (weekHasData(w)) {
+      lastPopulated = i;
+      if (past) lastPopulatedUpToToday = i;
+    }
+  });
+
+  if (lastPopulatedUpToToday >= 0) return lastPopulatedUpToToday;  // normal case
+  if (lastPopulated >= 0) return lastPopulated;                    // sheet is all forecast
+  return lastUpToToday;                                            // nothing anywhere
 }
 
 /* --------------------------------------------------------------------------
@@ -1157,6 +1340,19 @@ function snapshotFromRows(rows) {
 
 const SOURCE_STORAGE_KEY = 'gj_cashflow_source';
 const WORKING_SHEET_NAME = 'Business Working Account';
+
+// The four account tabs. Only the working account carries the weekly series;
+// the rest contribute opening and closing balances to the 4 Accounts tab.
+const ACCOUNT_TABS = [
+  { key: 'working',    sheet: 'Business Working Account',      label: 'Working Account',     required: true },
+  { key: 'regulation', sheet: 'Regulation Bank Account',       label: 'Regulation Account',  required: false },
+  { key: 'savings',    sheet: 'Business Savings Account',      label: 'Savings Account',     required: false },
+  { key: 'profit',     sheet: 'Profit Reinvest. Bank Account', label: 'Profit Reinvestment', required: false }
+];
+
+// Balances move slowly; re-reading three extra tabs every 5 seconds would
+// triple the proxy traffic for almost no benefit.
+const SECONDARY_REFRESH_MS = 60000;
 
 /**
  * Turn whatever the user pasted into a source descriptor.
@@ -1206,7 +1402,7 @@ function parseSheetSource(raw) {
  * through Google's CDN and can lag several minutes behind an edit, which would
  * defeat polling every 5 seconds.
  */
-function candidateUrls(source) {
+function candidateUrls(source, sheetName) {
   if (!source) return [];
 
   if (source.kind === 'appsscript') return [source.url];
@@ -1216,20 +1412,24 @@ function candidateUrls(source) {
     return [base + (base.indexOf('?') >= 0 ? '&' : '?') + 'output=csv'];
   }
 
+  const tab = sheetName || WORKING_SHEET_NAME;
+  const isWorking = tab === WORKING_SHEET_NAME;
   const base = 'https://docs.google.com/spreadsheets/d/' + source.id;
   const list = [];
 
-  // By tab NAME first. The dashboard needs the working-account tab
-  // specifically — a gid copied from the address bar is just whichever tab
-  // happened to be open, which is usually not the one we want.
-  list.push(base + '/gviz/tq?tqx=out:csv&headers=0&sheet=' + encodeURIComponent(WORKING_SHEET_NAME));
-  list.push(base + '/export?format=csv&sheet=' + encodeURIComponent(WORKING_SHEET_NAME));
+  // By tab NAME first. The dashboard needs a specific tab — a gid copied from
+  // the address bar is just whichever one happened to be open.
+  list.push(base + '/gviz/tq?tqx=out:csv&headers=0&sheet=' + encodeURIComponent(tab));
+  list.push(base + '/export?format=csv&sheet=' + encodeURIComponent(tab));
 
-  // export returns the literal grid — every row and column in position, which
-  // suits a row-indexed layout better than gviz's reshaped output.
-  if (source.gid) list.push(base + '/export?format=csv&gid=' + source.gid);
-
-  list.push(base + '/export?format=csv');
+  // The gid and first-tab fallbacks only make sense for the working account;
+  // for a named secondary tab they would silently return the wrong one.
+  if (isWorking) {
+    // export returns the literal grid — every row and column in position,
+    // which suits a row-indexed layout better than gviz's reshaped output.
+    if (source.gid) list.push(base + '/export?format=csv&gid=' + source.gid);
+    list.push(base + '/export?format=csv');
+  }
   return list;
 }
 
@@ -1269,8 +1469,11 @@ function clearStoredSource() {
    Fetching.
    -------------------------------------------------------------------------- */
 
-/** Fetch one URL through the proxy and parse it. Returns { snapshot } or { error }. */
-async function tryFetchUrl(target) {
+/**
+ * Fetch one URL through the proxy and parse it.
+ * Returns { snapshot } (or { rows } when rawRows is set), else { error }.
+ */
+async function tryFetchUrl(target, rawRows) {
   let res, body;
   try {
     res = await fetch(SHEET_PROXY + '?url=' + encodeURIComponent(target), { cache: 'no-store' });
@@ -1287,6 +1490,10 @@ async function tryFetchUrl(target) {
 
   if (body.kind === 'snapshot') return { snapshot: body.snapshot };
 
+  if (body.kind === 'rows' && rawRows) {
+    return body.rows && body.rows.length ? { rows: body.rows } : { error: 'empty tab' };
+  }
+
   if (body.kind === 'rows') {
     const snap = snapshotFromRows(body.rows);
     if (snap.weekly && snap.weekly.length >= 2) return { snapshot: snap };
@@ -1297,14 +1504,66 @@ async function tryFetchUrl(target) {
   return { error: 'unrecognised payload from the sync service' };
 }
 
+/** Fetch one account tab, returning its raw rows or null. */
+async function fetchTabRows(source, sheetName) {
+  const targets = candidateUrls(source, sheetName);
+  for (let i = 0; i < targets.length; i++) {
+    const res = await tryFetchUrl(targets[i], true);
+    if (res.rows) return res.rows;
+  }
+  return null;
+}
+
 /**
- * Fetch and parse a source, trying each candidate endpoint until one yields
- * usable weeks. The winning URL is remembered on the source so polling goes
- * straight to it instead of re-probing every 5 seconds.
+ * Fetch and parse a source. The working-account tab supplies the weekly
+ * series; the other three account tabs supply their balances.
+ *
+ * `includeSecondary` is false on most polls — balances move slowly and
+ * re-reading three extra tabs every 5 seconds would triple proxy traffic.
  */
-async function fetchFromSource(source) {
+async function fetchFromSource(source, includeSecondary) {
   if (!source) throw new Error('No data source is configured.');
 
+  // The Apps Script bridge already returns all four tabs in one snapshot.
+  if (source.kind === 'appsscript') {
+    const res = await tryFetchUrl(source.url);
+    if (res.snapshot) return res.snapshot;
+    throw new Error('Apps Script bridge — ' + res.error);
+  }
+
+  const primary = await fetchPrimary(source);
+  if (includeSecondary === false) return primary;
+
+  // The remaining account tabs, in parallel. A tab that is missing or shaped
+  // differently is reported as unavailable rather than filled with a
+  // placeholder — a stale figure that looks real is worse than a blank.
+  const secondary = ACCOUNT_TABS.filter(function (t) { return !t.required; });
+  const status = primary.tabStatus || {};
+  status[WORKING_SHEET_NAME] = { key: 'working', ok: true };
+
+  const results = await Promise.all(secondary.map(function (tab) {
+    return fetchTabRows(source, tab.sheet)
+      .then(function (rows) {
+        if (!rows) return { tab: tab, error: 'tab not found or not readable' };
+        const parsed = accountFromRows(rows, primary.currentWeekIso);
+        if (!parsed) return { tab: tab, error: 'no opening/closing balance found' };
+        parsed.label = tab.label;
+        return { tab: tab, account: parsed };
+      })
+      .catch(function (err) { return { tab: tab, error: String(err && err.message || err) }; });
+  }));
+
+  results.forEach(function (r) {
+    status[r.tab.sheet] = { key: r.tab.key, ok: !!r.account, error: r.error || null };
+    if (r.account) primary.accounts[r.tab.key] = r.account;
+  });
+
+  primary.tabStatus = status;
+  return primary;
+}
+
+/** The working-account tab: the weekly series everything else derives from. */
+async function fetchPrimary(source) {
   // Fast path: an endpoint that already worked for this source.
   if (source.resolvedUrl) {
     const quick = await tryFetchUrl(source.resolvedUrl);
@@ -1313,7 +1572,7 @@ async function fetchFromSource(source) {
     source.resolvedUrl = null;
   }
 
-  const targets = candidateUrls(source);
+  const targets = candidateUrls(source, WORKING_SHEET_NAME);
   if (!targets.length) throw new Error('No data source is configured.');
 
   const attempts = [];
@@ -1349,7 +1608,7 @@ function describeEndpoint(url) {
   return 'first tab (export)';
 }
 
-async function fetchSnapshot() {
+async function fetchSnapshot(includeSecondary) {
   // 1. The Supabase snapshot row — written by Apps Script, RLS-guarded.
   if (sb && sync.sheetId) {
     const { data, error } = await sb
@@ -1362,7 +1621,7 @@ async function fetchSnapshot() {
 
   // 2. The connected source, proxied to get around CORS.
   if (sync.source) {
-    return { snapshot: await fetchFromSource(sync.source), via: sync.source.kind };
+    return { snapshot: await fetchFromSource(sync.source, includeSecondary), via: sync.source.kind };
   }
 
   return null;
@@ -1372,7 +1631,12 @@ async function refreshFromSource(isInitial) {
   if (sync.inFlight) return;
   sync.inFlight = true;
   try {
-    const result = await fetchSnapshot();
+    const now = Date.now();
+    const dueForSecondary = isInitial || !sync.lastSecondaryAt ||
+                            (now - sync.lastSecondaryAt) >= SECONDARY_REFRESH_MS;
+    if (dueForSecondary) sync.lastSecondaryAt = now;
+
+    const result = await fetchSnapshot(dueForSecondary);
     if (!result) {
       setStatus('cached', 'Cached data');
       setBanner('warn', '⚡ No live data source is linked to this account yet, so the figures below are the built-in sample data.');
@@ -1487,11 +1751,67 @@ function renderConnect() {
   html += '<div style="font-size:10px;color:#d0dbd6;opacity:.6;word-break:break-all;margin-bottom:6px;">' + sourceSummary(sync.source) + '</div>';
   html += '<div style="font-size:10px;">' + modeLabel + '</div>';
   if (sync.lastUpdated) {
-    html += '<div style="font-size:10px;color:#d0dbd6;opacity:.5;margin-top:4px;">Last update ' + stamp(sync.lastUpdated) + ' · ' + WEEKLY.length + ' weeks loaded</div>';
+    const populated = WEEKLY.filter(weekHasData).length;
+    html += '<div style="font-size:10px;color:#d0dbd6;opacity:.5;margin-top:4px;">Last update ' + stamp(sync.lastUpdated) +
+            ' · ' + WEEKLY.length + ' weeks loaded, ' + populated + ' with figures</div>';
   }
   html += '</div>';
   html += '<button class="cbtn ghost" onclick="disconnectSheet()">Disconnect</button>';
-  html += '</div></div>';
+  html += '</div>';
+
+  // Which of the four account tabs were actually read.
+  if (sync.tabStatus) {
+    const rows = ACCOUNT_TABS.map(function (tab) {
+      const st = sync.tabStatus[tab.sheet];
+      const ok = st && st.ok;
+      return '<div style="display:flex;justify-content:space-between;font-size:9px;gap:10px;">' +
+             '<span style="color:#d0dbd6;opacity:.6;">' + tab.sheet + '</span>' +
+             '<span style="color:' + (ok ? '#ccf492' : '#f59e0b') + ';font-weight:600;white-space:nowrap;">' +
+             (ok ? 'read' : (st && st.error ? st.error : 'not read')) + '</span></div>';
+    }).join('');
+    const okCount = ACCOUNT_TABS.filter(function (t) {
+      const st = sync.tabStatus[t.sheet]; return st && st.ok;
+    }).length;
+
+    html += '<div style="padding-top:10px;margin-top:10px;border-top:1px solid rgba(49,81,80,.3);">';
+    html += '<div style="font-size:8px;color:#d0dbd6;opacity:.5;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">' +
+            'Account tabs read — ' + okCount + ' of ' + ACCOUNT_TABS.length + '</div>';
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:2px 14px;">' + rows + '</div>';
+    html += '</div>';
+  }
+
+  // Which sheet row each figure came from. Silent zeros almost always mean a
+  // row was matched by position instead of by its label, so show the mapping.
+  if (sync.rowMap) {
+    const LABELS = {
+      opening: 'Opening Bank Balance', sales: 'Total Sales',
+      otherIncome: 'Total Other Income', receipts: 'Total Receipts',
+      supplier: 'Total Supplier Payments', paymentsOut: 'Total Payments Out',
+      closing: 'Closing Bank Balance'
+    };
+    const guessed = Object.keys(sync.rowMap).filter(function (k) { return sync.rowMap[k].by === 'offset'; });
+    html += '<div style="padding-top:10px;margin-top:10px;border-top:1px solid rgba(49,81,80,.3);">';
+    html += '<div style="font-size:8px;color:#d0dbd6;opacity:.5;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Rows read from the sheet</div>';
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:2px 14px;">';
+    Object.keys(LABELS).forEach(function (k) {
+      const info = sync.rowMap[k];
+      if (!info) return;
+      const byLabel = info.by === 'label';
+      html += '<div style="display:flex;justify-content:space-between;font-size:9px;">' +
+              '<span style="color:#d0dbd6;opacity:.6;">' + LABELS[k] + '</span>' +
+              '<span style="color:' + (byLabel ? '#ccf492' : '#f59e0b') + ';font-weight:600;">row ' + info.row +
+              (byLabel ? '' : ' (guessed)') + '</span></div>';
+    });
+    html += '</div>';
+    if (guessed.length) {
+      html += '<div style="font-size:9px;color:#f59e0b;opacity:.85;margin-top:8px;line-height:1.6;">' +
+              guessed.length + ' row' + (guessed.length === 1 ? '' : 's') + ' could not be found by label and ' +
+              'were located by position instead. If figures look wrong, check the label text in column B of the sheet.</div>';
+    }
+    html += '</div>';
+  }
+
+  html += '</div>';
   el.innerHTML = html;
 }
 
@@ -1510,7 +1830,7 @@ async function connectSheet() {
   try {
     // Prove the source works before adopting it, so a bad link never
     // replaces a working connection.
-    const snapshot = await fetchFromSource(parsed);
+    const snapshot = await fetchFromSource(parsed, true);
     const problem = validateSnapshot(snapshot);
     if (problem) throw new Error(problem);
 
@@ -1547,6 +1867,9 @@ function disconnectSheet() {
   sync.source = null;
   sync.sheetId = null;
   sync.lastUpdated = null;
+  sync.tabStatus = null;
+  sync.lastSecondaryAt = 0;
+  ACCOUNTS_LIVE_KEYS = {};
   clearStoredSource();
   persistSourceToAccount(null);
   setStatus('cached', 'Not connected');

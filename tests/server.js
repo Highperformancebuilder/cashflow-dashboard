@@ -11,6 +11,15 @@ const KNOWN_SHEET = '1MXTCOStUpHpGYrthqRb8NCuERbUIeyZcRZVvdG4P15c';
 function buildGrid(weeks) {
   const grid = Array.from({ length: 217 }, () => Array(3 + weeks.length).fill(''));
   const put = (row, vals) => vals.forEach((v, i) => { grid[row - 1][3 + i] = v; });
+  const label = (rowNum, text) => { grid[rowNum - 1][1] = text; };
+  label(6,   'Week Commencing');
+  label(8,   'Opening Bank Balance');
+  label(65,  'Total Sales');
+  label(74,  'Total Other Income');
+  label(76,  'Total Receipts');
+  label(98,  'Total Supplier Payments');
+  label(215, 'Total Payments Out');
+  label(217, 'Closing Bank Balance');
   put(6,   weeks.map(w => w.iso));
   put(8,   weeks.map(w => w.opening));
   put(65,  weeks.map(w => w.sales));
@@ -24,6 +33,23 @@ function buildGrid(weeks) {
 
 // Bumping this simulates somebody editing the spreadsheet.
 let salesBump = 0;
+
+// Tabs the fixture should pretend are absent, driven by /__hide.
+const MISSING_TABS = new Set();
+
+// A secondary account tab: same row labels, only opening and closing filled.
+function buildAccountGrid(ws, balances) {
+  const grid = Array.from({ length: 217 }, () => Array(3 + ws.length).fill(''));
+  grid[5][1] = 'Week Commencing';
+  grid[7][1] = 'Opening Bank Balance';
+  grid[216][1] = 'Closing Bank Balance';
+  ws.forEach((w, i) => {
+    grid[5][3 + i] = w.iso;
+    grid[7][3 + i] = balances.opening;
+    grid[216][3 + i] = balances.closing;
+  });
+  return grid;
+}
 
 function weeks() {
   const out = [];
@@ -60,9 +86,33 @@ http.createServer((req, res) => {
       res.writeHead(502, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ error: 'Upstream returned 404' }));
     }
+    // Serve whichever tab was asked for, as the real spreadsheet would.
+    const tab = decodeURIComponent((target.match(/[?&]sheet=([^&]*)/) || [])[1] || '');
+    const SECONDARY = {
+      'Regulation Bank Account':       { opening: 15658, closing: 7059 },
+      'Business Savings Account':      { opening: 49000, closing: 50000 },
+      'Profit Reinvest. Bank Account': { opening: 0,     closing: 1200 }
+    };
+    if (SECONDARY[tab]) {
+      if (MISSING_TABS.has(tab)) {
+        res.writeHead(502, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: 'Upstream returned 400' }));
+      }
+      const grid = buildAccountGrid(weeks(), SECONDARY[tab]);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ kind: 'rows', fetchedAt: new Date().toISOString(), rows: grid }));
+    }
     const grid = buildGrid(weeks());
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({ kind: 'rows', fetchedAt: new Date().toISOString(), rows: grid }));
+  }
+
+  // Test hook: pretend a tab is missing.
+  if (url.pathname === '/__hide') {
+    const t = url.searchParams.get('tab');
+    if (t === '') MISSING_TABS.clear(); else MISSING_TABS.add(t);
+    res.writeHead(204);
+    return res.end();
   }
 
   // Test hook: pretend somebody edited the spreadsheet.

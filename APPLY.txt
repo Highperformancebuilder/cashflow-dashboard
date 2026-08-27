@@ -1,68 +1,71 @@
-Greg Jones Cashflow Dashboard
-Realtime Sync + Connect Tab + sheet-connection fix
-==================================================
+Greg Jones Cashflow Dashboard — v4
+All four account tabs
+==================================
 
-This supersedes the earlier zip. It contains the FIX for the
-"no week dates on row 6" error you hit when connecting the real sheet.
+Supersedes all earlier zips.
 
-WHAT THIS IS
-------------
-The complete, final version of every changed file. Not a patch — just copy
-these over your repo, overwriting. Works whatever state your tree is in.
+WHAT CHANGED IN v4
+------------------
+Only the "Business Working Account" tab was ever being fetched. The other
+three account cards — Regulation, Savings, Profit Reinvestment — were showing
+HARDCODED placeholder figures ($7,059 / $50,000 / $0) that looked exactly like
+live data, and the "Total Across All Accounts" tile added them up as if real.
 
-If a previous patch attempt left git mid-apply, clear it first:
+Now all four tabs are read:
 
-    git am --abort
+  Business Working Account        the weekly series          (required)
+  Regulation Bank Account         opening + closing balance
+  Business Savings Account        opening + closing balance
+  Profit Reinvest. Bank Account   opening + closing balance
+
+If a tab cannot be read, its card shows a dash and names the tab to check. It
+is excluded from the total, and the total says how many accounts are missing.
+No placeholder is ever shown as though it were a real balance.
+
+The Connect tab now lists all four tabs with their read status ("read" /
+"not read"), so you can verify at a glance.
+
+Balances refresh every 60 seconds; the weekly figures still refresh every 5.
+
+
+CARRIED OVER FROM v3
+--------------------
+- Rows matched by their LABEL in column B, not by row number.
+- Dashboard opens on the most recent week that HAS figures.
+- Year-to-date falls back to the most recent year holding data.
+- Connect tab shows which row each figure was read from.
 
 
 HOW TO APPLY
 ------------
-1. Unzip into the ROOT of your cloned repo, preserving folders.
-2. Check:     git status
-3. Delete APPLY.txt if you don't want it committed.
-4. Commit and push:
-
-       git add -A
-       git commit -m "Add realtime Google Sheets sync, Connect tab, and sheet-connection fix"
-       git push -u origin claude/client-files-review-g1ngpj
-
-5. Redeploy on Netlify (automatic if it is connected to this branch).
+1. Unzip into the ROOT of your repo, overwriting.
+2. rm APPLY.txt
+3. git add -A
+   git commit -m "Read all four account tabs; row matching by label"
+   git push -u origin claude/client-files-review-g1ngpj
+4. Netlify redeploys automatically.
 
 
-WHAT WAS FIXED
+HOW TO VERIFY
+-------------
+Open the Connect tab after reloading. You should see:
+
+  ACCOUNT TABS READ — 4 of 4
+    Business Working Account         read
+    Regulation Bank Account          read
+    Business Savings Account         read
+    Profit Reinvest. Bank Account    read
+
+  ROWS READ FROM THE SHEET
+    Opening Bank Balance   row 8      (green = matched by label)
+    Total Receipts         row 76
+    ...
+
+Anything amber means it could not be matched — send me that panel.
+
+
+STILL REQUIRED
 --------------
-Connecting a real sheet failed because a gid in the pasted URL
-(...edit?gid=457366843) replaced the tab name in the request. A gid from the
-address bar is just whichever tab was open, so the dashboard asked for the
-wrong tab and never mentioned "Business Working Account" at all.
-
-Now: the tab is requested BY NAME first; the gid is only a fallback.
-
-Also, the layout was read at fixed row numbers. Google's gviz endpoint can
-drop leading blank rows, shifting everything. The week-date row is now found
-by content and all other rows are read as offsets from it — so the sheet
-still parses if rows shift, or if you insert a row above row 6.
-
-If a connection still fails, the error now lists every endpoint tried and
-what each one said. Send me that text and it will point straight at the cause.
-
-
-FILES
------
-index.html                  The dashboard. REPLACES your current file.
-apps-script/Code.gs         Optional: paste into the sheet's Apps Script for
-                            instant updates instead of 5-second polling.
-netlify/functions/sheet.js  CORS proxy for Google. Host-allowlisted.
-netlify.toml                Netlify build + functions config.
-supabase/schema.sql         Tables, RLS policies, Realtime publication.
-README.md                   Full setup instructions.
-tests/                      Browser + unit tests.
-
-
-STILL REQUIRED BEFORE IT WORKS LIVE
------------------------------------
-1. Run supabase/schema.sql in the Supabase SQL editor (RLS is off until you
-   do — the publishable key in index.html exposes client emails and sheet ids).
-2. Deploy to Netlify so netlify/functions/sheet.js is live. Without it the
-   browser cannot read Google Sheets at all.
-3. Share the spreadsheet: Anyone with the link -> Viewer.
+- Run supabase/schema.sql (RLS is off until you do).
+- Deploy to Netlify so netlify/functions/sheet.js is live.
+- Share the sheet: Anyone with the link -> Viewer.

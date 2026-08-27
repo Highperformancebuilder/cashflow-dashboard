@@ -102,6 +102,39 @@ var ROW_OFFSET = {
   closing:     ROW.closing               - ROW.weekDates
 };
 
+// The sheet labels every row we need in its left-hand columns. Matching those
+// labels survives inserted, deleted or reordered rows; offsets do not.
+var ROW_LABELS = [
+  { key: 'weekDates',   re: /^week\s*commencing/i },
+  { key: 'opening',     re: /^opening\s*bank\s*balance/i },
+  { key: 'sales',       re: /^total\s*sales/i },
+  { key: 'otherIncome', re: /^total\s*other\s*income/i },
+  { key: 'receipts',    re: /^total\s*receipts/i },
+  { key: 'supplier',    re: /^total\s*supplier\s*payments/i },
+  { key: 'paymentsOut', re: /^total\s*payments\s*out/i },
+  { key: 'closing',     re: /^closing\s*bank\s*balance/i }
+];
+
+/** Map each known label to its 0-based row index. First match wins. */
+function findLabelledRows_(grid) {
+  var found = {};
+  for (var r = 0; r < grid.length; r++) {
+    var row = grid[r] || [];
+    var scan = Math.min(row.length, 5);
+    for (var c = 0; c < scan; c++) {
+      var cell = row[c];
+      if (typeof cell !== 'string') continue;
+      var text = cell.trim();
+      if (!text) continue;
+      for (var i = 0; i < ROW_LABELS.length; i++) {
+        var spec = ROW_LABELS[i];
+        if (found[spec.key] === undefined && spec.re.test(text)) found[spec.key] = r;
+      }
+    }
+  }
+  return found;
+}
+
 /**
  * Locate the week-date row. Returns a 0-based index, or -1.
  * Bare numbers are skipped so a row of figures cannot be read as dates.
@@ -130,18 +163,23 @@ function findWeekDateRow_(grid) {
  * series keeps working when weeks are appended to the sheet.
  */
 function parseWeekly_(grid) {
-  var base = findWeekDateRow_(grid);
+  var labelled = findLabelledRows_(grid);
+  var base = (labelled.weekDates !== undefined) ? labelled.weekDates : findWeekDateRow_(grid);
   if (base < 0) return [];
 
-  var at = function (offset) { return grid[base + offset] || []; };
-  var dates    = at(0);
-  var opening  = at(ROW_OFFSET.opening);
-  var sales    = at(ROW_OFFSET.sales);
-  var otherIn  = at(ROW_OFFSET.otherIncome);
-  var receipts = at(ROW_OFFSET.receipts);
-  var supplier = at(ROW_OFFSET.supplier);
-  var payments = at(ROW_OFFSET.paymentsOut);
-  var closing  = at(ROW_OFFSET.closing);
+  // By label where the sheet names the row, else by offset from the week row.
+  var at = function (key, offset) {
+    var idx = (labelled[key] !== undefined) ? labelled[key] : base + offset;
+    return grid[idx] || [];
+  };
+  var dates    = grid[base] || [];
+  var opening  = at('opening',     ROW_OFFSET.opening);
+  var sales    = at('sales',       ROW_OFFSET.sales);
+  var otherIn  = at('otherIncome', ROW_OFFSET.otherIncome);
+  var receipts = at('receipts',    ROW_OFFSET.receipts);
+  var supplier = at('supplier',    ROW_OFFSET.supplier);
+  var payments = at('paymentsOut', ROW_OFFSET.paymentsOut);
+  var closing  = at('closing',     ROW_OFFSET.closing);
 
   var weeks = [];
   for (var col = 0; col < dates.length; col++) {
@@ -180,10 +218,16 @@ function parseWeekly_(grid) {
  * the week-date row when present, else by taking the last populated column.
  */
 function parseAccount_(grid, currentIso) {
-  var base = findWeekDateRow_(grid);
-  var dates   = base >= 0 ? (grid[base] || [])                          : rowValues_(grid, ROW.weekDates);
-  var opening = base >= 0 ? (grid[base + ROW_OFFSET.opening] || [])     : rowValues_(grid, ROW.opening);
-  var closing = base >= 0 ? (grid[base + ROW_OFFSET.closing] || [])     : rowValues_(grid, ROW.closing);
+  var labelled = findLabelledRows_(grid);
+  var base = (labelled.weekDates !== undefined) ? labelled.weekDates : findWeekDateRow_(grid);
+  var at = function (key, offset, fallbackRow) {
+    if (labelled[key] !== undefined) return grid[labelled[key]] || [];
+    if (base >= 0) return grid[base + offset] || [];
+    return rowValues_(grid, fallbackRow);
+  };
+  var dates   = base >= 0 ? (grid[base] || []) : rowValues_(grid, ROW.weekDates);
+  var opening = at('opening', ROW_OFFSET.opening, ROW.opening);
+  var closing = at('closing', ROW_OFFSET.closing, ROW.closing);
 
   var target = -1;
   for (var col = 0; col < dates.length; col++) {
@@ -240,12 +284,25 @@ function buildSnapshot() {
                     '" sheet. Expected them on row ' + ROW.weekDates + '.');
   }
 
-  // Current week = the latest week whose start date has already passed.
+  // Open on the most recent week that actually carries figures. Using "the
+  // week containing today" shows zeros whenever the sheet is not filled in
+  // that far ahead, which is the usual state.
   var todayIso = isoDate_(new Date());
-  var currentIdx = 0;
+  var hasData = function (w) {
+    return w && (w.total_in !== 0 || w.total_out !== 0 || w.opening !== 0 || w.closing !== 0 || w.sales !== 0);
+  };
+  var lastPast = 0, lastPopulatedPast = -1, lastPopulated = -1;
   for (var i = 0; i < weekly.length; i++) {
-    if (weekly[i].iso <= todayIso) currentIdx = i;
+    var past = weekly[i].iso <= todayIso;
+    if (past) lastPast = i;
+    if (hasData(weekly[i])) {
+      lastPopulated = i;
+      if (past) lastPopulatedPast = i;
+    }
   }
+  var currentIdx = lastPopulatedPast >= 0 ? lastPopulatedPast
+                 : lastPopulated    >= 0 ? lastPopulated
+                 : lastPast;
   var currentIso = weekly[currentIdx].iso;
 
   var accounts = {};

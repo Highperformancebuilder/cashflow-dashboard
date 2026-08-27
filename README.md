@@ -190,8 +190,25 @@ or a CSV endpoint trimming leading blank rows, therefore shifts the whole
 layout without breaking parsing. Relative order still matters: do not reorder
 rows between row 6 and row 217.
 
-Sheets read: `Business Working Account`, `Regulation Bank Account`,
-`Business Savings Account`, `Profit Reinvest. Bank Account`.
+### Tabs read
+
+| Tab | Supplies | Required |
+|---|---|---|
+| `Business Working Account` | the whole weekly series | yes |
+| `Regulation Bank Account` | opening + closing balance | no |
+| `Business Savings Account` | opening + closing balance | no |
+| `Profit Reinvest. Bank Account` | opening + closing balance | no |
+
+All four are read on connect and refreshed every 60 seconds (the weekly series
+refreshes every 5). A tab that cannot be read is reported as unread in the
+Connect panel, and its card on the 4 Accounts tab shows a dash — never a
+placeholder figure, which on a cashflow dashboard would be worse than a blank.
+
+Rows are matched by the label in the sheet's left-hand columns (`Week
+Commencing`, `Opening Bank Balance`, `Total Receipts`, …) rather than by row
+number, so inserting or moving rows does not break parsing. Row numbers are
+only a fallback for a sheet with no labels, and the Connect panel says when
+that fallback was used.
 
 ---
 
@@ -206,6 +223,7 @@ node tests/e2e.js             # happy path, incl. a simulated realtime push
 node tests/e2e.js --no-chart  # same, with the Chart.js CDN blocked
 node tests/degraded.js        # CDN failures, RLS denial, unlinked account
 node tests/connect.js         # Connect tab, validation, 5s update loop
+node tests/tabs.js            # all four account tabs, and missing-tab handling
 node tests/url-test.js        # URL parsing (no browser needed)
 node tests/rowdetect-test.js  # sheet-layout parsing (no browser needed)
 ```
