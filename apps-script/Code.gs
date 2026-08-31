@@ -104,35 +104,120 @@ var ROW_OFFSET = {
 
 // The sheet labels every row we need in its left-hand columns. Matching those
 // labels survives inserted, deleted or reordered rows; offsets do not.
-var ROW_LABELS = [
-  { key: 'weekDates',   re: /^week\s*commencing/i },
-  { key: 'opening',     re: /^opening\s*bank\s*balance/i },
-  { key: 'sales',       re: /^total\s*sales/i },
-  { key: 'otherIncome', re: /^total\s*other\s*income/i },
-  { key: 'receipts',    re: /^total\s*receipts/i },
-  { key: 'supplier',    re: /^total\s*supplier\s*payments/i },
-  { key: 'paymentsOut', re: /^total\s*payments\s*out/i },
-  { key: 'closing',     re: /^closing\s*bank\s*balance/i }
-];
+//
+// Labels are compared normalised — lowercased, punctuation collapsed to single
+// spaces — so "Total Receipts ($)" and "TOTAL  RECEIPTS:" both reduce to
+// "total receipts".
+function normLabel_(v) {
+  return String(v == null ? '' : v).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
 
-/** Map each known label to its 0-based row index. First match wins. */
-function findLabelledRows_(grid) {
-  var found = {};
-  for (var r = 0; r < grid.length; r++) {
-    var row = grid[r] || [];
-    var scan = Math.min(row.length, 5);
-    for (var c = 0; c < scan; c++) {
-      var cell = row[c];
-      if (typeof cell !== 'string') continue;
-      var text = cell.trim();
-      if (!text) continue;
-      for (var i = 0; i < ROW_LABELS.length; i++) {
-        var spec = ROW_LABELS[i];
-        if (found[spec.key] === undefined && spec.re.test(text)) found[spec.key] = r;
-      }
+// Accepted wordings per figure, most specific first. The live sheet names its
+// cash-movement rows "Total Business Receipts (Cash Inwards)" and "Total
+// Business Payments (Cash Outwards)"; a single narrow pattern per row missed
+// both and the dashboard reported no money moving in or out.
+var ROW_LABELS = {
+  weekDates: [/^week commencing/, /^week beginning/, /^week starting/, /^w c\b/, /^week$/],
+  opening: [/^opening bank balance/, /^opening balance/, /^opening bal/,
+            /^balance brought forward/, /^balance b f$/, /^bank balance opening/],
+  sales: [/^total sales/, /^total revenue/, /^total income$/, /^sales total/],
+  otherIncome: [/^total other income/, /^other income total/, /^total other receipts/],
+  receipts: [/^total business receipts/, /^total receipts/, /^total cash receipts/,
+             /^total cash in/, /^total money in/, /^total in$/, /^receipts total/],
+  supplier: [/^total supplier payments/, /^supplier payments total/, /^total suppliers?/],
+  paymentsOut: [/^total business payments/, /^total payments out/, /^total payments$/,
+                /^total cash out/, /^total money out/, /^total out$/,
+                /^total outgoings/, /^total expenses/, /^total expenditure/],
+  closing: [/^closing bank balance/, /^closing balance/, /^closing bal/,
+            /^balance carried forward/, /^balance c f$/, /^bank balance closing/]
+};
+
+var ROW_KEYS = Object.keys(ROW_LABELS);
+var LABEL_SCAN_COLS = 12;
+
+/** Best pattern rank for this row against `key`. 0 means no match. */
+function rowLabelRank_(row, key) {
+  var pats = ROW_LABELS[key];
+  var scan = Math.min(row.length, LABEL_SCAN_COLS);
+  var best = 0;
+  for (var c = 0; c < scan; c++) {
+    var text = normLabel_(row[c]);
+    if (!text) continue;
+    for (var p = 0; p < pats.length; p++) {
+      var rank = pats.length - p;
+      if (rank > best && pats[p].test(text)) best = rank;
     }
   }
-  return found;
+  return best;
+}
+
+/** How many of the week columns of this row carry a number. 0 = empty row. */
+function rowDataCount_(row, weekCols) {
+  if (!row) return 0;
+  var n = 0;
+  for (var i = 0; i < weekCols.length; i++) if (num_(row[weekCols[i]]) !== 0) n++;
+  return n;
+}
+
+/**
+ * Work out which grid row supplies each figure.
+ *
+ * Rows that carry figures beat empty ones, then the more specific wording
+ * wins, then the row closest to the documented layout. A row located only by
+ * offset that carries no figures is reported missing rather than read as a
+ * column of zeros.
+ */
+function resolveRows_(grid) {
+  var dateRow = -1, bestRank = 0, r;
+  for (r = 0; r < grid.length; r++) {
+    var rank = rowLabelRank_(grid[r] || [], 'weekDates');
+    if (rank > bestRank) { bestRank = rank; dateRow = r; }
+  }
+  if (dateRow < 0) dateRow = findWeekDateRow_(grid);
+  if (dateRow < 0) return { dateRow: -1, weekCols: [], map: {}, warnings: [] };
+
+  var dates = grid[dateRow] || [];
+  var weekCols = [];
+  for (var c = 0; c < dates.length; c++) {
+    var d = date_(dates[c]);
+    if (d && d.getUTCFullYear() >= 2015 && d.getUTCFullYear() <= 2100) weekCols.push(c);
+  }
+
+  var better = function (a, b) {
+    if (!b) return true;
+    if ((a.data > 0) !== (b.data > 0)) return a.data > 0;
+    if (a.rank !== b.rank) return a.rank > b.rank;
+    return a.dist < b.dist;
+  };
+
+  var map = {}, warnings = [];
+  ROW_KEYS.forEach(function (key) {
+    if (key === 'weekDates') return;
+    var expected = dateRow + ROW_OFFSET[key];
+    var best = null;
+    for (var r2 = 0; r2 < grid.length; r2++) {
+      var rk = rowLabelRank_(grid[r2] || [], key);
+      if (!rk) continue;
+      var cand = { row: r2, rank: rk, data: rowDataCount_(grid[r2], weekCols),
+                   dist: Math.abs(r2 - expected) };
+      if (better(cand, best)) best = cand;
+    }
+    if (best) {
+      map[key] = { row: best.row + 1, index: best.row, by: 'label', cells: best.data };
+      if (!best.data) warnings.push(key + ' matched row ' + (best.row + 1) + ', but that row is empty');
+      return;
+    }
+    var guessData = rowDataCount_(grid[expected], weekCols);
+    if (guessData > 0) {
+      map[key] = { row: expected + 1, index: expected, by: 'offset', cells: guessData };
+      warnings.push(key + ' could not be matched by name; read from row ' + (expected + 1) + ' by position');
+    } else {
+      map[key] = { row: null, index: -1, by: 'missing', cells: 0 };
+      warnings.push(key + ' could not be found in this sheet');
+    }
+  });
+
+  return { dateRow: dateRow, weekCols: weekCols, map: map, warnings: warnings };
 }
 
 /**
@@ -162,53 +247,84 @@ function findWeekDateRow_(grid) {
  * Columns are discovered from the week-date row rather than hardcoded, so the
  * series keeps working when weeks are appended to the sheet.
  */
-function parseWeekly_(grid) {
-  var labelled = findLabelledRows_(grid);
-  var base = (labelled.weekDates !== undefined) ? labelled.weekDates : findWeekDateRow_(grid);
-  if (base < 0) return [];
+function parseWeekly_(grid, out) {
+  var res = resolveRows_(grid);
+  if (res.dateRow < 0) return [];
 
-  // By label where the sheet names the row, else by offset from the week row.
-  var at = function (key, offset) {
-    var idx = (labelled[key] !== undefined) ? labelled[key] : base + offset;
-    return grid[idx] || [];
+  var m = res.map;
+  if (out) { out.rowMap = m; out.warnings = res.warnings.slice(); }
+
+  // A row never located, or holding no figures at all, is treated as absent so
+  // the reconciliation below can derive it. A row that IS present but blank in
+  // one week stays a genuine zero for that week.
+  var at = function (key) {
+    var info = m[key];
+    if (!info || info.index < 0 || info.cells === 0) return null;
+    return grid[info.index] || null;
   };
-  var dates    = grid[base] || [];
-  var opening  = at('opening',     ROW_OFFSET.opening);
-  var sales    = at('sales',       ROW_OFFSET.sales);
-  var otherIn  = at('otherIncome', ROW_OFFSET.otherIncome);
-  var receipts = at('receipts',    ROW_OFFSET.receipts);
-  var supplier = at('supplier',    ROW_OFFSET.supplier);
-  var payments = at('paymentsOut', ROW_OFFSET.paymentsOut);
-  var closing  = at('closing',     ROW_OFFSET.closing);
 
+  var dates       = grid[res.dateRow] || [];
+  var opening     = at('opening');
+  var salesRow    = at('sales');
+  var otherRow    = at('otherIncome');
+  var receiptsRow = at('receipts');
+  var supplierRow = at('supplier');
+  var paymentsRow = at('paymentsOut');
+  var closingRow  = at('closing');
+
+  var derivedIn = 0, derivedOut = 0, derivedClose = 0;
   var weeks = [];
+
   for (var col = 0; col < dates.length; col++) {
     var d = date_(dates[col]);
     if (!d || d.getUTCFullYear() < 2020 || d.getUTCFullYear() > 2100) continue;
 
-    var open = num_(opening[col]);
-    var totalIn = num_(receipts[col]);
-    var totalOut = num_(payments[col]);
+    var cell = function (row) { return row ? num_(row[col]) : null; };
 
-    // Prefer the sheet's own closing figure; fall back to the identity so a
-    // blank row still produces a continuous series.
-    var close = closing[col] === '' || closing[col] === null || closing[col] === undefined
-      ? open + totalIn - totalOut
-      : num_(closing[col]);
+    var open  = cell(opening) || 0;
+    var sales = cell(salesRow) || 0;
+    var other = cell(otherRow) || 0;
+    var supp  = cell(supplierRow) || 0;
+
+    var totalIn  = cell(receiptsRow);
+    var totalOut = cell(paymentsRow);
+    var close    = cell(closingRow);
+
+    // Reconcile whatever is missing from what is present, via the identity
+    //   closing = opening + in - out
+    if (totalIn === null && (salesRow || otherRow)) { totalIn = sales + other; derivedIn++; }
+    if (totalOut === null && close !== null && totalIn !== null) { totalOut = open + totalIn - close; derivedOut++; }
+    if (totalIn === null && close !== null && totalOut !== null) { totalIn = close - open + totalOut; derivedIn++; }
+    if (close === null && totalIn !== null && totalOut !== null) { close = open + totalIn - totalOut; derivedClose++; }
+
+    if (totalIn === null) totalIn = 0;
+    if (totalOut === null) totalOut = 0;
+    if (close === null) close = open + totalIn - totalOut;
 
     weeks.push({
       idx: weeks.length,
       iso: isoDate_(d),
       label: weekLabel_(d),
       opening: open,
-      sales: num_(sales[col]),
-      other_income: num_(otherIn[col]),
+      sales: sales,
+      other_income: other,
       total_in: totalIn,
-      supplier: num_(supplier[col]),
+      supplier: supp,
       total_out: totalOut,
       closing: close
     });
   }
+
+  if (out) {
+    if (derivedIn)    m.receipts    = { row: m.receipts.row,    by: 'derived', from: 'Total Sales + Total Other Income' };
+    if (derivedOut)   m.paymentsOut = { row: m.paymentsOut.row, by: 'derived', from: 'opening + cash in - closing' };
+    if (derivedClose) m.closing     = { row: m.closing.row,     by: 'derived', from: 'opening + cash in - cash out' };
+    var noMovement = weeks.length > 0 && weeks.every(function (w) {
+      return w.total_in === 0 && w.total_out === 0;
+    });
+    if (noMovement) out.warnings.push('Read ' + weeks.length + ' weeks but found no money in or out on any of them');
+  }
+
   return weeks;
 }
 
@@ -218,40 +334,50 @@ function parseWeekly_(grid) {
  * the week-date row when present, else by taking the last populated column.
  */
 function parseAccount_(grid, currentIso) {
-  var labelled = findLabelledRows_(grid);
-  var base = (labelled.weekDates !== undefined) ? labelled.weekDates : findWeekDateRow_(grid);
-  var at = function (key, offset, fallbackRow) {
-    if (labelled[key] !== undefined) return grid[labelled[key]] || [];
-    if (base >= 0) return grid[base + offset] || [];
-    return rowValues_(grid, fallbackRow);
-  };
-  var dates   = base >= 0 ? (grid[base] || []) : rowValues_(grid, ROW.weekDates);
-  var opening = at('opening', ROW_OFFSET.opening, ROW.opening);
-  var closing = at('closing', ROW_OFFSET.closing, ROW.closing);
+  var res = resolveRows_(grid);
+  var base = res.dateRow;
+  var openInfo = res.map.opening, closeInfo = res.map.closing;
 
-  var target = -1;
+  var opening = (openInfo && openInfo.index >= 0) ? (grid[openInfo.index] || []) : [];
+  var closing = (closeInfo && closeInfo.index >= 0) ? (grid[closeInfo.index] || []) : [];
+  if (!opening.length && !closing.length) return null;
+
+  var dates = base >= 0 ? (grid[base] || []) : [];
+  var target = -1, asOf = null, stale = false;
+
   for (var col = 0; col < dates.length; col++) {
     var d = date_(dates[col]);
-    if (d && isoDate_(d) === currentIso) { target = col; break; }
+    if (d && isoDate_(d) === currentIso) { target = col; asOf = currentIso; break; }
   }
 
   if (target === -1) {
-    // No matching date row — fall back to the rightmost column carrying a balance.
+    // No column for the week on screen — take the rightmost column that carries
+    // a balance. A populated zero is a real $0 balance, not a parse failure:
+    // the Profit Reinvestment tab is legitimately empty and used to be reported
+    // as a missing tab, sending people looking for a tab that was there.
     for (var c = closing.length - 1; c >= 0; c--) {
       if (closing[c] !== '' && closing[c] !== null && closing[c] !== undefined) { target = c; break; }
+    }
+    if (target >= 0 && base >= 0) {
+      var dd = date_(dates[target]);
+      if (dd) { asOf = isoDate_(dd); stale = asOf !== currentIso; }
     }
   }
   if (target === -1) return null;
 
   return {
     opening: num_(opening[target]),
-    closing: num_(closing[target])
+    closing: num_(closing[target]),
+    asOf: asOf,
+    stale: stale
   };
 }
 
 /** Weekly contribution for a savings-style account, used for the 12m projection. */
 function weeklyContribution_(grid) {
-  var closing = rowValues_(grid, ROW.closing);
+  // Was reading row 217 absolutely, which broke the moment a row was inserted.
+  var info = resolveRows_(grid).map.closing;
+  var closing = (info && info.index >= 0) ? (grid[info.index] || []) : rowValues_(grid, ROW.closing);
   var vals = [];
   for (var c = 0; c < closing.length; c++) {
     if (closing[c] === '' || closing[c] === null || closing[c] === undefined) continue;
@@ -265,20 +391,49 @@ function weeklyContribution_(grid) {
 }
 
 /** Build the full snapshot the dashboard consumes. */
+/**
+ * Match every tab in the spreadsheet to an account, by normalised name so a
+ * rename or a stray space does not silently drop a tab. Tabs the dashboard does
+ * not consume are returned so the Connect panel can list them — "make sure all
+ * the tabs are populating" is unanswerable if we never say what we found.
+ */
+function classifySheets_(ss) {
+  var matched = {}, other = [];
+  ss.getSheets().forEach(function (sh) {
+    var name = sh.getName();
+    var norm = normLabel_(name);
+    var hit = null;
+    ACCOUNTS.forEach(function (a) { if (normLabel_(a.sheet) === norm) hit = a.key; });
+    if (hit && !matched[hit]) matched[hit] = name; else other.push(name);
+  });
+  return { matched: matched, other: other };
+}
+
 function buildSnapshot() {
   var ss = SpreadsheetApp.openById(sheetId_());
+  var found = classifySheets_(ss);
   var grids = {};
+  var tabStatus = {};
 
   ACCOUNTS.forEach(function (acct) {
-    var sh = ss.getSheetByName(acct.sheet);
+    var name = found.matched[acct.key] || acct.sheet;
+    var sh = ss.getSheetByName(name);
     grids[acct.key] = sh ? sh.getDataRange().getValues() : null;
+    tabStatus[acct.sheet] = {
+      key: acct.key,
+      ok: !!sh,
+      resolvedName: sh ? name : null,
+      error: sh ? null : 'tab not found in this spreadsheet'
+    };
   });
 
   if (!grids.working) {
-    throw new Error('Sheet "' + ACCOUNTS[0].sheet + '" not found in spreadsheet ' + sheetId_());
+    throw new Error('Sheet "' + ACCOUNTS[0].sheet + '" not found in spreadsheet ' + sheetId_() +
+                    '. Tabs present: ' + found.other.join(', '));
   }
 
-  var weekly = parseWeekly_(grids.working);
+  var diag = {};
+  var weekly = parseWeekly_(grids.working, diag);
   if (!weekly.length) {
     throw new Error('No week dates found in the first 40 rows of the "' + ACCOUNTS[0].sheet +
                     '" sheet. Expected them on row ' + ROW.weekDates + '.');
@@ -314,7 +469,12 @@ function buildSnapshot() {
       ? { opening: weekly[currentIdx].opening, closing: weekly[currentIdx].closing }
       : parseAccount_(grid, currentIso);
 
-    if (!parsed) { accounts[acct.key] = null; return; }
+    if (!parsed) {
+      accounts[acct.key] = null;
+      tabStatus[acct.sheet].ok = false;
+      tabStatus[acct.sheet].error = 'no opening/closing balance found in this tab';
+      return;
+    }
 
     parsed.label = acct.label;
     if (acct.key === 'savings' || acct.key === 'profit') {
@@ -330,7 +490,11 @@ function buildSnapshot() {
     currentWeekIso: currentIso,
     currentWeekIdx: currentIdx,
     weekly: weekly,
-    accounts: accounts
+    accounts: accounts,
+    tabStatus: tabStatus,
+    otherTabs: found.other,
+    rowMap: diag.rowMap || null,
+    parseWarnings: diag.warnings || []
   };
 }
 
@@ -418,7 +582,17 @@ function installTrigger() {
 /** Convenience: verify parsing and the Supabase write end to end. */
 function testSnapshot() {
   var s = buildSnapshot();
-  console.log('weeks: %s | current: %s | accounts: %s',
-    s.weekly.length, s.currentWeekIso, JSON.stringify(s.accounts));
+  console.log('weeks: %s | current: %s', s.weekly.length, s.currentWeekIso);
+  console.log('accounts: %s', JSON.stringify(s.accounts));
+  console.log('rows read: %s', JSON.stringify(s.rowMap));
+  console.log('tabs read: %s', JSON.stringify(s.tabStatus));
+  if (s.otherTabs && s.otherTabs.length) {
+    console.log('OTHER TABS in this spreadsheet, not read by the dashboard: %s', s.otherTabs.join(', '));
+  }
+  if (s.parseWarnings && s.parseWarnings.length) {
+    console.warn('PARSE WARNINGS:\n · %s', s.parseWarnings.join('\n · '));
+  } else {
+    console.log('every figure matched a row by name');
+  }
   return s;
 }

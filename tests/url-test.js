@@ -1,6 +1,7 @@
 // Extract the pure URL functions straight from index.html and exercise them.
 const fs = require('fs');
-const src = fs.readFileSync('/home/user/cashflow-dashboard/index.html', 'utf8');
+const path = require('path');
+const src = fs.readFileSync(path.resolve(__dirname, '..', 'index.html'), 'utf8');
 const grab = (name) => {
   const i = src.indexOf('function ' + name + '(');
   if (i < 0) throw new Error('not found: ' + name);
@@ -10,9 +11,13 @@ const grab = (name) => {
     else if (src[j] === '}') { depth--; if (started && depth === 0) return src.slice(i, j + 1); }
   }
 };
+const pick = (re) => { const m = src.match(re); if (!m) throw new Error('no match: ' + re); return m[0]; };
 const WORKING_SHEET_NAME = 'Business Working Account';
 // One eval so buildFetchUrl can see candidateUrls.
-eval([grab('parseSheetSource'), grab('candidateUrls'), grab('buildFetchUrl'), grab('sourceSummary')].join('\n'));
+eval([
+  pick(/const TAB_ALIASES = \{[\s\S]*?\n\};/),
+  grab('parseSheetSource'), grab('candidateUrls'), grab('buildFetchUrl'), grab('sourceSummary')
+].join('\n'));
 
 const ID = '1MXTCOStUpHpGYrthqRb8NCuERbUIeyZcRZVvdG4P15c';
 let pass = 0, fail = 0;

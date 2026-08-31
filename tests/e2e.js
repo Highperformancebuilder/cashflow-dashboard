@@ -1,22 +1,30 @@
-const { chromium } = require('/opt/node22/lib/node_modules/playwright');
+const { chromium } = require('playwright');
+const isolate = require('./isolate');
+// Playwright's own bundled Chromium by default; CHROME_PATH overrides it.
+const LAUNCH = process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {};
 
 // Stub the Supabase SDK so we can drive auth and realtime deterministically.
 const STUB = require('fs').readFileSync(__dirname + '/stub.js', 'utf8');
 
 (async () => {
   const NO_CHART = process.argv.includes('--no-chart');
-  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const browser = await chromium.launch(LAUNCH);
   const page = await browser.newPage();
+  await isolate(page);
   const errors = [];
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
   page.on('console', m => { if (m.type() === 'error') errors.push('CONSOLE: ' + m.text()); });
 
   if (NO_CHART) await page.addInitScript('window.__noChart = true;');
+  await page.route('**/cdn.jsdelivr.net/**', async route => {
+    await route.abort();
+  });
+
   await page.addInitScript(STUB);
   await page.goto('http://localhost:8099/', { waitUntil: 'networkidle' });
 
   const T = [];
-  const check = (name, pass, detail='') => { T.push({name, pass: !!pass, detail}); };
+  const check = (name, pass, detail = '') => { T.push({ name, pass: !!pass, detail }); };
   const ev = async (fn, arg) => { try { return await page.evaluate(fn, arg); } catch (e) { return { __err: e.message }; } };
 
   // ---- 1. Login gate --------------------------------------------------
@@ -46,7 +54,7 @@ const STUB = require('fs').readFileSync(__dirname + '/stub.js', 'utf8');
   check('WEEKLY replaced by fetched data (60 weeks)', weekCount === 60, 'got ' + weekCount);
 
   const cw = await ev(() => ({ idx: CW_IDX, iso: WEEKLY[CW_IDX].iso, view: viewIdx }));
-  const todayIso = new Date().toISOString().slice(0,10);
+  const todayIso = new Date().toISOString().slice(0, 10);
   check('CW_IDX derived, not stuck at 50', cw && (cw.idx !== 50 || cw.iso <= todayIso), JSON.stringify(cw));
   check('current week is not in the future', cw && cw.iso <= todayIso, String(cw && cw.iso));
   check('viewIdx follows current week', cw && cw.view === cw.idx, JSON.stringify(cw));
@@ -54,11 +62,11 @@ const STUB = require('fs').readFileSync(__dirname + '/stub.js', 'utf8');
   // ---- 5. Derived series recomputed -----------------------------------
   const derived = await ev(() => {
     const cur = WEEKLY[CW_IDX];
-    const fyEnd = (iso) => { const y=+iso.slice(0,4), m=+iso.slice(5,7); return m>=7?y+1:y; };
+    const fyEnd = (iso) => { const y = +iso.slice(0, 4), m = +iso.slice(5, 7); return m >= 7 ? y + 1 : y; };
     const fy = fyEnd(cur.iso);
-    let s=0,i=0,o=0;
-    WEEKLY.forEach(w => { if (w.iso<=cur.iso && fyEnd(w.iso)===fy) { s+=w.sales; i+=w.total_in; o+=w.total_out; } });
-    return { ytd: {...YTD}, expect: {sales:Math.round(s), in:Math.round(i), out:Math.round(o)}, months: MONTHLY.length };
+    let s = 0, i = 0, o = 0;
+    WEEKLY.forEach(w => { if (w.iso <= cur.iso && fyEnd(w.iso) === fy) { s += w.sales; i += w.total_in; o += w.total_out; } });
+    return { ytd: { ...YTD }, expect: { sales: Math.round(s), in: Math.round(i), out: Math.round(o) }, months: MONTHLY.length };
   });
   check('YTD recomputed from live weeks',
     derived.ytd && derived.expect && derived.ytd.sales === derived.expect.sales && derived.ytd.in === derived.expect.in && derived.ytd.out === derived.expect.out,
@@ -69,10 +77,10 @@ const STUB = require('fs').readFileSync(__dirname + '/stub.js', 'utf8');
   const acct = await ev(() => {
     const grid = document.getElementById('accounts-grid');
     const total = document.getElementById('accounts-total');
-    return { cards: grid ? grid.children.length : 0, totalText: total ? total.textContent.trim().slice(0,80) : '' };
+    return { cards: grid ? grid.children.length : 0, totalText: total ? total.textContent.trim().slice(0, 80) : '' };
   });
   check('accounts grid renders 4 cards', acct && acct.cards === 4, 'cards=' + JSON.stringify(acct));
-  check('accounts total renders', acct && acct.totalText && acct.totalText.includes('Total Across All Accounts'), String(acct && acct.totalText).slice(0,60));
+  check('accounts total renders', acct && acct.totalText && acct.totalText.includes('Total Across All Accounts'), String(acct && acct.totalText).slice(0, 60));
 
   const workingMatches = await ev(() => {
     const closing = WEEKLY[CW_IDX].closing;
@@ -87,12 +95,12 @@ const STUB = require('fs').readFileSync(__dirname + '/stub.js', 'utf8');
     const fallback = await ev(() => /chart unavailable/i.test(document.body.innerText));
     check('charts degrade gracefully when Chart.js is unavailable', fallback);
   } else {
-    const charts = await ev(() => ['fy-chart','bal-chart'].map(id => !!Chart.getChart(id)));
+    const charts = await ev(() => ['fy-chart', 'bal-chart'].map(id => !!Chart.getChart(id)));
     check('overview charts instantiated', Array.isArray(charts) && charts.every(Boolean), JSON.stringify(charts));
   }
 
   // ---- 8. Tab navigation ----------------------------------------------
-  for (const [i, id] of [[1,'tab-weekly'],[2,'tab-monthly'],[3,'tab-clients'],[4,'tab-accounts']]) {
+  for (const [i, id] of [[1, 'tab-weekly'], [2, 'tab-monthly'], [3, 'tab-clients'], [4, 'tab-accounts']]) {
     await ev(i => document.querySelectorAll('.nb')[i].click(), i);
     await page.waitForTimeout(200);
     check('tab renders: ' + id, await page.isVisible('#' + id));
@@ -104,7 +112,7 @@ const STUB = require('fs').readFileSync(__dirname + '/stub.js', 'utf8');
   await ev(() => { renderAll(); renderAll(); });
   await page.waitForTimeout(300);
   check('repeated renderAll() is safe (no canvas reuse error)',
-    !errors.some(e => /already in use/i.test(e)), errors.filter(e=>/already/i.test(e)).join('|'));
+    !errors.some(e => /already in use/i.test(e)), errors.filter(e => /already/i.test(e)).join('|'));
 
   // ---- 10. THE POINT: a realtime push updates the DOM -----------------
   await ev(() => window.__subscribeCb && window.__subscribeCb('SUBSCRIBED'));
@@ -124,18 +132,18 @@ const STUB = require('fs').readFileSync(__dirname + '/stub.js', 'utf8');
       currentWeekIdx: 2,
       currentWeekIso: '2030-01-01',
       weekly: [
-        {iso:'2029-12-18', label:'18 Dec 29', opening:0,      sales:0,     other_income:0, total_in:0,      supplier:0, total_out:0,     closing:0},
-        {iso:'2029-12-25', label:'25 Dec 29', opening:0,      sales:1000,  other_income:0, total_in:1000,   supplier:0, total_out:500,   closing:500},
-        {iso:'2030-01-01', label:'01 Jan 30', opening:500,    sales:777777, other_income:0, total_in:777777, supplier:0, total_out:1234,  closing:777043}
+        { iso: '2029-12-18', label: '18 Dec 29', opening: 0, sales: 0, other_income: 0, total_in: 0, supplier: 0, total_out: 0, closing: 0 },
+        { iso: '2029-12-25', label: '25 Dec 29', opening: 0, sales: 1000, other_income: 0, total_in: 1000, supplier: 0, total_out: 500, closing: 500 },
+        { iso: '2030-01-01', label: '01 Jan 30', opening: 500, sales: 777777, other_income: 0, total_in: 777777, supplier: 0, total_out: 1234, closing: 777043 }
       ],
       accounts: {
-        working:    {label:'Working Account', opening:500, closing:777043},
-        regulation: {label:'Regulation Account', opening:11, closing:22},
-        savings:    {label:'Savings Account', opening:33, closing:44, projected12m:5555},
-        profit:     {label:'Profit Reinvestment', opening:0, closing:99, projected12m:100}
+        working: { label: 'Working Account', opening: 500, closing: 777043 },
+        regulation: { label: 'Regulation Account', opening: 11, closing: 22 },
+        savings: { label: 'Savings Account', opening: 33, closing: 44, projected12m: 5555 },
+        profit: { label: 'Profit Reinvestment', opening: 0, closing: 99, projected12m: 100 }
       }
     };
-    window.__realtimeHandlers.forEach(h => h({ new: { sheet_id:'SHEET123', payload: snap } }));
+    window.__realtimeHandlers.forEach(h => h({ new: { sheet_id: 'SHEET123', payload: snap } }));
   });
   await page.waitForTimeout(400);
 
@@ -155,7 +163,7 @@ const STUB = require('fs').readFileSync(__dirname + '/stub.js', 'utf8');
   check('overview DOM actually changed', after && after.ovClose !== beforeDom, beforeDom + ' -> ' + after.ovClose);
   check('YTD recomputed on push', after && after.ytdSales && (after.ytdSales.includes('778,777') || after.ytdSales.includes('777,777')), String(after && after.ytdSales));
   check('week label updated', after && after.label && after.label.includes('01 Jan 30'), String(after && after.label));
-  check('accounts tab updated from push', after && after.acctTotal && after.acctTotal.includes('777,208'), String(after && after.acctTotal).replace(/\s+/g,' ').slice(0,120));
+  check('accounts tab updated from push', after && after.acctTotal && after.acctTotal.includes('777,208'), String(after && after.acctTotal).replace(/\s+/g, ' ').slice(0, 120));
 
   // ---- 11. Malformed push is rejected, not applied ---------------------
   await ev(() => {
@@ -164,13 +172,13 @@ const STUB = require('fs').readFileSync(__dirname + '/stub.js', 'utf8');
   await page.waitForTimeout(300);
   const afterBad = await ev(() => ({ weeks: WEEKLY.length, banner: document.getElementById('sync-banner').textContent }));
   check('malformed snapshot rejected (data preserved)', afterBad && afterBad.weeks === 3, 'weeks=' + afterBad.weeks);
-  check('malformed snapshot surfaces a banner', afterBad && afterBad.banner && afterBad.banner.trim().length > 0, String(afterBad && afterBad.banner).trim().slice(0,80));
+  check('malformed snapshot surfaces a banner', afterBad && afterBad.banner && afterBad.banner.trim().length > 0, String(afterBad && afterBad.banner).trim().slice(0, 80));
 
   // ---- 12. Logout tears everything down --------------------------------
   const preLogout = await ev(() => ({
     wrap: document.getElementById('dashboard-wrap').style.display,
     login: document.getElementById('login-screen').style.display,
-    banner: document.getElementById('sync-banner').textContent.trim().slice(0,60)
+    banner: document.getElementById('sync-banner').textContent.trim().slice(0, 60)
   }));
   console.log('  [state before logout]', JSON.stringify(preLogout));
   await ev(() => handleLogout());

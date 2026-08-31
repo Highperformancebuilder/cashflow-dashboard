@@ -12,13 +12,15 @@ function buildGrid(weeks) {
   const grid = Array.from({ length: 217 }, () => Array(3 + weeks.length).fill(''));
   const put = (row, vals) => vals.forEach((v, i) => { grid[row - 1][3 + i] = v; });
   const label = (rowNum, text) => { grid[rowNum - 1][1] = text; };
+  // Wording taken verbatim from the live spreadsheet — the two "Business"
+  // rows are the ones the original patterns failed to match.
   label(6,   'Week Commencing');
   label(8,   'Opening Bank Balance');
   label(65,  'Total Sales');
   label(74,  'Total Other Income');
-  label(76,  'Total Receipts');
+  label(76,  'Total Business Receipts (Cash Inwards)');
   label(98,  'Total Supplier Payments');
-  label(215, 'Total Payments Out');
+  label(215, 'Total Business Payments (Cash Outwards)');
   label(217, 'Closing Bank Balance');
   put(6,   weeks.map(w => w.iso));
   put(8,   weeks.map(w => w.opening));

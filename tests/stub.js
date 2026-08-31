@@ -27,7 +27,7 @@ if (!window.__noSupabase) {
           },
           signOut: async function () { return { error: null }; },
           getSession: async function () { return { data: { session: null } }; },
-          onAuthStateChange: function () { return { data: { subscription: { unsubscribe: function () {} } } }; }
+          onAuthStateChange: function () { return { data: { subscription: { unsubscribe: function () { } } } }; }
         },
         from: function (table) {
           window.__log.push('from:' + table);
@@ -38,7 +38,12 @@ if (!window.__noSupabase) {
               if (table === 'clients') {
                 if (window.__clientRow === null) return { data: null, error: null };
                 if (window.__clientError) return { data: null, error: { message: 'permission denied' } };
-                return { data: window.__clientRow || { sheet_id: 'SHEET123', script_url: 'https://script.google.com/macros/s/x/exec' }, error: null };
+                return {
+                  data: window.__clientRow || {
+                    sheet_id: '1MXTCOStUpHpGYrthqRb8NCuERbUIeyZcRZVvdG4P15c',
+                    script_url: null
+                  }, error: null
+                };
               }
               return { data: null, error: null }; // no snapshot row -> use the proxy path
             }

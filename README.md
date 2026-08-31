@@ -167,28 +167,44 @@ publication and that the signed-in user's `clients.sheet_id` matches the
 
 ## Spreadsheet layout contract
 
-`apps-script/Code.gs` reads these **1-based row numbers**. Moving a row
-breaks parsing; add rows below rather than reordering.
+Rows are found by **the label in their left-hand column**, not by row number.
+These are the labels in the live sheet, with the row each currently sits on:
 
-| Row | Meaning |
-|---|---|
-| 6 | Week start dates |
-| 8 | Opening balance |
-| 65 | Total sales |
-| 74 | Total other income |
-| 76 | Total receipts |
-| 98 | Total supplier payments |
-| 215 | Total payments out |
-| 217 | Closing bank balance |
+| Row | Label in the sheet | Feeds |
+|---|---|---|
+| 6 | `Week Commencing` | the week columns |
+| 8 | `Opening Bank Balance` | Opening Balance |
+| 65 | `Total Sales` | YTD Total Sales |
+| 74 | `Total Other Income` | — |
+| 76 | `Total Business Receipts (Cash Inwards)` | **Cash In** |
+| 98 | `Total Supplier Payments` | weekly breakdown |
+| 215 | `Total Business Payments (Cash Outwards)` | **Cash Out** |
+| 217 | `Closing Bank Balance` | Closing Balance |
 
 Week **columns** are discovered by scanning the week-date row, so appending
-weeks needs no code change.
+weeks needs no code change. Rows can be inserted, deleted or moved freely —
+matching is by label.
 
-The week-date row is located by content rather than by its absolute number,
-and every other row is read as an offset from it. Inserting a row above row 6,
-or a CSV endpoint trimming leading blank rows, therefore shifts the whole
-layout without breaking parsing. Relative order still matters: do not reorder
-rows between row 6 and row 217.
+Several wordings are accepted for each row (`Total Receipts`, `Total Business
+Receipts`, `Total Cash In`, … all resolve to Cash In); see `ROW_LABELS` in
+`index.html` and `apps-script/Code.gs`. If a row cannot be matched by name the
+parser falls back to its position relative to the week-date row, and only if
+*that* row holds figures — a blank row is reported as missing rather than read
+as a column of zeros.
+
+Anything still missing is reconstructed from the identity
+`closing = opening + in − out`, so a sheet that names its receipts row
+unusually still shows real cash movement. The Connect tab labels every figure
+as **matched / guessed / calculated / not found**, and the dashboard raises a
+banner whenever anything was not matched by name.
+
+> **Why this matters.** The first version matched only `Total Receipts` and
+> `Total Payments Out`. The live sheet says `Total Business Receipts (Cash
+> Inwards)` and `Total Business Payments (Cash Outwards)`, so both rows fell
+> through to the offset fallback — and because gviz silently drops blank rows,
+> those offsets landed on a supplier row and past the end of the sheet. Cash
+> In, Cash Out and Net read $0 on every one of 213 weeks while opening and
+> closing balances looked perfectly normal.
 
 ### Tabs read
 
@@ -204,28 +220,72 @@ refreshes every 5). A tab that cannot be read is reported as unread in the
 Connect panel, and its card on the 4 Accounts tab shows a dash — never a
 placeholder figure, which on a cashflow dashboard would be worse than a blank.
 
-Rows are matched by the label in the sheet's left-hand columns (`Week
-Commencing`, `Opening Bank Balance`, `Total Receipts`, …) rather than by row
-number, so inserting or moving rows does not break parsing. Row numbers are
-only a fallback for a sheet with no labels, and the Connect panel says when
-that fallback was used.
+The three secondary tabs carry no `Week Commencing` label, so their date row is
+located by finding the row that holds dates; opening and closing are matched by
+their own labels as usual.
+
+Two cases that are **not** failures, and are no longer reported as such:
+
+- **A balance of $0** is a real balance. The Profit Reinvestment account is
+  legitimately empty; it shows `$0`, not a dash.
+- **A tab with no column for the current week** still shows its most recent
+  figure, labelled with the date it is actually from ("Last figure in this tab
+  is from 10 Jul 2025"). Passing a year-old balance off as this week's is worse
+  than showing nothing.
+
+Tab names are matched exactly by Google, so each is also tried under its known
+aliases (`Profit Reinvest. Bank Account`, `Profit Reinvestment Bank Account`, …)
+before the tab is given up on.
+
+When the Apps Script bridge is installed it enumerates **every** tab in the
+spreadsheet and lists the ones the dashboard does not read, so "are all my tabs
+being picked up?" has a visible answer. A CSV endpoint cannot list tabs, so
+that line is absent on the polling path.
 
 ---
 
 ## Tests
 
-Browser tests covering the sync layer, the failure paths and the realtime
-update. They need Playwright and Chromium available.
+All test tooling lives in `tests/`, including its `package.json`. That is
+deliberate: Netlify runs `npm install` whenever it finds a `package.json` in
+the base directory, and **the site itself has no build step and no runtime
+dependencies** — keeping it out of the root leaves the deploy untouched.
 
 ```bash
-node tests/server.js &        # static server + mock sheet endpoint
-node tests/e2e.js             # happy path, incl. a simulated realtime push
-node tests/e2e.js --no-chart  # same, with the Chart.js CDN blocked
-node tests/degraded.js        # CDN failures, RLS denial, unlinked account
-node tests/connect.js         # Connect tab, validation, 5s update loop
-node tests/tabs.js            # all four account tabs, and missing-tab handling
-node tests/url-test.js        # URL parsing (no browser needed)
-node tests/rowdetect-test.js  # sheet-layout parsing (no browser needed)
+cd tests
+```
+
+Two suites run with no browser and nothing installed:
+
+```bash
+node url-test.js              # URL parsing
+node rowdetect-test.js        # sheet-layout parsing, label matching
+```
+
+The rest drive a real browser. Install Playwright once:
+
+```bash
+npm install
+npx playwright install chromium
+```
+
+Then, with the fixture server running in another terminal:
+
+```bash
+npm run serve                 # static server + mock sheet endpoint, port 8099
+
+npm run test:e2e              # happy path, incl. a simulated realtime push
+npm run test:e2e:nochart      # same, with the Chart.js CDN blocked
+npm run test:degraded         # CDN failures, RLS denial, unlinked account
+npm run test:connect          # Connect tab, validation, 5s update loop
+npm run test:tabs             # all four account tabs, and missing-tab handling
+```
+
+Set `CHROME_PATH` to use a browser you already have instead of Playwright's
+bundled Chromium:
+
+```bash
+CHROME_PATH="/c/Program Files/Google/Chrome/Application/chrome.exe" npm run test:e2e
 ```
 
 ---
@@ -234,7 +294,9 @@ node tests/rowdetect-test.js  # sheet-layout parsing (no browser needed)
 
 - **Client receipts are still hardcoded.** The `CLIENTS` array in
   `index.html` does not come from the spreadsheet, so the Clients tab does
-  not update on edit. It needs a source sheet before it can be wired in.
+  not update on edit. The data does exist in the sheet — the Working Account
+  tab lists each client on its own row between `Sales:` and `Total Sales`
+  (rows 12–45) — so this is now wireable, but it is not wired yet.
 - **FY2024 / FY2025 totals are hardcoded** historical constants. They are
   not in the current spreadsheet.
 - **The regulation account's super/PAYG/BAS weekly figures** are static

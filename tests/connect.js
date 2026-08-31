@@ -1,6 +1,9 @@
 // Connect tab: pasting a sheet link, validation, the 5-second update loop,
 // and proof that the existing dashboard tabs keep working throughout.
-const { chromium } = require('/opt/node22/lib/node_modules/playwright');
+const { chromium } = require('playwright');
+const isolate = require('./isolate');
+// Playwright's own bundled Chromium by default; CHROME_PATH overrides it.
+const LAUNCH = process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {};
 const http = require('http');
 const STUB = require('fs').readFileSync(__dirname + '/stub.js', 'utf8');
 
@@ -14,8 +17,9 @@ const mutate = (v) => new Promise(r => http.get('http://localhost:8099/__mutate?
 (async () => {
   await mutate(0);   // reset the fixture so re-runs are independent
 
-  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const browser = await chromium.launch(LAUNCH);
   const page = await browser.newPage();
+  await isolate(page);
   const errors = [];
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
 

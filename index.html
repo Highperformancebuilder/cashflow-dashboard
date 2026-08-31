@@ -241,8 +241,10 @@ tr:hover td{background:rgba(49,81,80,.08)}
       <em>Share &rarr; General access &rarr; Anyone with the link &rarr; Viewer</em>.
       Without this the dashboard cannot read it.<br><br>
       <strong style="color:#d0dbd6;opacity:.9;">2. Check the tab name.</strong> The weekly figures are read from a tab called
-      <code>Business Working Account</code>, using row 6 for week dates, row 8 for opening balance,
-      row 76 for total receipts and row 217 for the closing balance.<br><br>
+      <code>Business Working Account</code>. Rows are found by the label in their left-hand column —
+      <code>Week Commencing</code>, <code>Opening Bank Balance</code>, <code>Total Business Receipts</code>,
+      <code>Total Business Payments</code>, <code>Closing Bank Balance</code> — so rows can be added or moved
+      without breaking anything. After connecting, the panel above lists exactly which row supplied each figure.<br><br>
       <strong style="color:#d0dbd6;opacity:.9;">3. Updates.</strong> Edits appear within about 5 seconds while this tab is open.
       For instant updates, install the Apps Script bridge on the sheet (see <code>README.md</code>) and paste its
       <code>/exec</code> link here instead — that switches the dashboard to a live websocket.
@@ -745,7 +747,9 @@ const sync = {
   scriptUrl: null,
   source: null,          // the connected Google Sheet / Apps Script descriptor
   rowMap: null,          // which sheet row each figure was read from
+  parseWarnings: null,   // figures that could not be matched to a row by name
   tabStatus: null,       // which account tabs were read successfully
+  otherTabs: null,       // tabs present in the spreadsheet that we do not read
   lastSecondaryAt: 0,    // when the secondary account tabs were last read
   channel: null,
   pollTimer: null,
@@ -788,6 +792,14 @@ function setBanner(kind, message) {
 function stamp(iso) {
   const d = iso ? new Date(iso) : new Date();
   return isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+/** A calendar date, for dating a balance that is not from the current week. */
+function stamp2(iso) {
+  if (!iso) return '';
+  const d = new Date(iso + 'T00:00:00Z');
+  if (isNaN(d.getTime())) return String(iso);
+  return ('0' + d.getUTCDate()).slice(-2) + ' ' + MONTH_ABBR[d.getUTCMonth()] + ' ' + d.getUTCFullYear();
 }
 
 /* --------------------------------------------------------------------------
@@ -857,6 +869,12 @@ function renderAccounts() {
     if (!isLive) {
       html += '<div style="font-size:9px;color:#f59e0b;opacity:.85;line-height:1.5;margin-bottom:8px;">' +
               'Not read from the sheet — check the <strong>' + ACCOUNT_TAB_NAMES[key] + '</strong> tab exists.</div>';
+    } else if (a.stale && a.asOf) {
+      // The tab was read, but it has no column for the week on screen. Date the
+      // figure rather than letting an old balance read as the current one.
+      html += '<div style="font-size:9px;color:#f59e0b;opacity:.85;line-height:1.5;margin-bottom:8px;">' +
+              'Last figure in this tab is from <strong>' + stamp2(a.asOf) + '</strong> — it has not been ' +
+              'updated for the current week.</div>';
     }
 
     html += '<div style="padding-top:8px;border-top:1px solid rgba(49,81,80,.3);">';
@@ -1054,13 +1072,28 @@ function applySnapshot(snap, origin) {
     });
   }
   sync.tabStatus = snap.tabStatus || sync.tabStatus;
+  // Only the Apps Script bridge can enumerate tabs — a CSV endpoint cannot.
+  if (snap.otherTabs) sync.otherTabs = snap.otherTabs;
 
   rebuildDerived();
   renderAll();
 
   sync.rowMap = snap.rowMap || null;
+  sync.parseWarnings = (snap.parseWarnings && snap.parseWarnings.length) ? snap.parseWarnings : null;
   sync.lastUpdated = snap.generatedAt || new Date().toISOString();
-  setBanner(null, null);
+
+  // A sheet that parses to zeros used to look identical to a sheet with no
+  // trading. Say so on the dashboard rather than only in the Connect panel.
+  if (sync.parseWarnings) {
+    const n = sync.parseWarnings.length;
+    setBanner('warn', '⚡ The spreadsheet was read, but ' + n + ' figure' + (n === 1 ? '' : 's') +
+      ' could not be matched to a row by name. Open the <strong>Connect</strong> tab to see ' +
+      'which rows were used.<br><span style="opacity:.8;font-size:10px;">· ' +
+      sync.parseWarnings.slice(0, 3).join('<br>· ') +
+      (n > 3 ? '<br>· …and ' + (n - 3) + ' more' : '') + '</span>');
+  } else {
+    setBanner(null, null);
+  }
   if (typeof renderConnect === 'function') renderConnect();
   setStatus(sync.mode === 'realtime' ? 'realtime' : 'polling',
             (sync.mode === 'realtime' ? 'Live' : 'Polling') + ' · ' + stamp(sync.lastUpdated));
@@ -1091,37 +1124,174 @@ const ROW_OFFSET = {
  * The spreadsheet labels every row we need in its left-hand columns. Matching
  * on those labels is far more robust than counting rows: it survives inserted
  * or deleted rows, and CSV endpoints that drop blank rows.
+ *
+ * Labels are compared in a normalised form — lowercased, punctuation collapsed
+ * to single spaces — so "Total Receipts ($)" and "TOTAL  RECEIPTS:" both reduce
+ * to "total receipts" and formatting differences between sheets stop mattering.
  */
-const ROW_LABELS = [
-  { key: 'weekDates',   re: /^week\s*commencing/i },
-  { key: 'opening',     re: /^opening\s*bank\s*balance/i },
-  { key: 'sales',       re: /^total\s*sales/i },
-  { key: 'otherIncome', re: /^total\s*other\s*income/i },
-  { key: 'receipts',    re: /^total\s*receipts/i },
-  { key: 'supplier',    re: /^total\s*supplier\s*payments/i },
-  { key: 'paymentsOut', re: /^total\s*payments\s*out/i },
-  { key: 'closing',     re: /^closing\s*bank\s*balance/i }
-];
+function normLabel(v) {
+  return String(v == null ? '' : v)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
 
-/** Map each known label to its 0-based row index. First match wins. */
-function findLabelledRows(rows) {
-  const found = {};
-  for (let r = 0; r < rows.length; r++) {
-    const row = rows[r] || [];
-    // Labels live in the first few columns, well left of the week data.
-    const scan = Math.min(row.length, 5);
-    for (let c = 0; c < scan; c++) {
-      const cell = row[c];
-      if (typeof cell !== 'string') continue;
-      const text = cell.trim();
-      if (!text) continue;
-      for (let i = 0; i < ROW_LABELS.length; i++) {
-        const spec = ROW_LABELS[i];
-        if (found[spec.key] === undefined && spec.re.test(text)) found[spec.key] = r;
-      }
+/**
+ * Accepted wordings per figure, most specific first.
+ *
+ * The first version carried one narrow pattern per row, which is why the live
+ * sheet failed: it names the two cash-movement rows "Total Business Receipts
+ * (Cash Inwards)" and "Total Business Payments (Cash Outwards)", neither of
+ * which matches /^total receipts/ or /^total payments out/. Both rows fell
+ * through to the offset fallback and read as zero, so the dashboard reported a
+ * business with no money moving in or out.
+ */
+const ROW_LABELS = {
+  weekDates: [
+    /^week commencing/, /^week beginning/, /^week starting/, /^w c\b/, /^week$/
+  ],
+  opening: [
+    /^opening bank balance/, /^opening balance/, /^opening bal/,
+    /^balance brought forward/, /^balance b f$/, /^bank balance opening/
+  ],
+  sales: [
+    /^total sales/, /^total revenue/, /^total income$/, /^sales total/
+  ],
+  otherIncome: [
+    /^total other income/, /^other income total/, /^total other receipts/
+  ],
+  receipts: [
+    /^total business receipts/, /^total receipts/, /^total cash receipts/,
+    /^total cash in/, /^total money in/, /^total in$/, /^receipts total/
+  ],
+  supplier: [
+    /^total supplier payments/, /^supplier payments total/, /^total suppliers?/
+  ],
+  paymentsOut: [
+    /^total business payments/, /^total payments out/, /^total payments$/,
+    /^total cash out/, /^total money out/, /^total out$/,
+    /^total outgoings/, /^total expenses/, /^total expenditure/
+  ],
+  closing: [
+    /^closing bank balance/, /^closing balance/, /^closing bal/,
+    /^balance carried forward/, /^balance c f$/, /^bank balance closing/
+  ]
+};
+
+const ROW_KEYS = Object.keys(ROW_LABELS);
+
+// Human names for the Connect panel and the parse warnings.
+const FIGURE_NAMES = {
+  weekDates: 'Week Commencing', opening: 'Opening Bank Balance',
+  sales: 'Total Sales', otherIncome: 'Total Other Income',
+  receipts: 'Total Receipts (cash in)', supplier: 'Total Supplier Payments',
+  paymentsOut: 'Total Payments Out (cash out)', closing: 'Closing Bank Balance'
+};
+
+// Labels sit in the left-hand columns, but not always within the first five —
+// widened so a sheet carrying extra description columns still resolves.
+const LABEL_SCAN_COLS = 12;
+
+/** Best pattern rank for this row against `key`. 0 means no match. */
+function rowLabelRank(row, key) {
+  const pats = ROW_LABELS[key];
+  const scan = Math.min(row.length, LABEL_SCAN_COLS);
+  let best = 0;
+  for (let c = 0; c < scan; c++) {
+    const text = normLabel(row[c]);
+    if (!text) continue;
+    for (let p = 0; p < pats.length; p++) {
+      const rank = pats.length - p;   // earlier pattern = more specific wording
+      if (rank > best && pats[p].test(text)) best = rank;
     }
   }
-  return found;
+  return best;
+}
+
+/** How many of the week columns of this row carry a number. 0 = empty row. */
+function rowDataCount(row, weekCols) {
+  if (!row) return 0;
+  let n = 0;
+  for (let i = 0; i < weekCols.length; i++) {
+    if (csvNum(row[weekCols[i]]) !== 0) n++;
+  }
+  return n;
+}
+
+/**
+ * Work out which sheet row supplies each figure, and say how confident we are.
+ *
+ * Candidates are ranked: rows that actually carry figures beat empty ones, then
+ * the more specific wording wins, then the row closest to where the documented
+ * layout puts it. Taking the first match top-down (the previous behaviour) let
+ * a summary block near the top of the sheet outrank the real detail row.
+ *
+ * A row located only by offset that carries no figures is reported as `missing`
+ * rather than read as a column of zeros. Silently treating blanks as $0 is what
+ * made a broken parse look like a business with no cash movement.
+ */
+function resolveRows(rows) {
+  let dateRow = -1, bestRank = 0;
+  for (let r = 0; r < rows.length; r++) {
+    const rank = rowLabelRank(rows[r] || [], 'weekDates');
+    if (rank > bestRank) { bestRank = rank; dateRow = r; }
+  }
+  if (dateRow < 0) dateRow = findWeekDateRow(rows);
+  if (dateRow < 0) return { dateRow: -1, weekCols: [], map: {}, warnings: [] };
+
+  const dates = rows[dateRow] || [];
+  const weekCols = [];
+  for (let c = 0; c < dates.length; c++) {
+    const d = csvDate(dates[c]);
+    if (d && d.getUTCFullYear() >= 2015 && d.getUTCFullYear() <= 2100) weekCols.push(c);
+  }
+
+  // Is a better than b?
+  const better = function (a, b) {
+    if (!b) return true;
+    if ((a.data > 0) !== (b.data > 0)) return a.data > 0;
+    if (a.rank !== b.rank) return a.rank > b.rank;
+    return a.dist < b.dist;
+  };
+
+  const map = {};
+  const warnings = [];
+
+  ROW_KEYS.forEach(function (key) {
+    if (key === 'weekDates') return;
+    const expected = dateRow + ROW_OFFSET[key];
+
+    let best = null;
+    for (let r = 0; r < rows.length; r++) {
+      const rank = rowLabelRank(rows[r] || [], key);
+      if (!rank) continue;
+      const cand = { row: r, rank: rank, data: rowDataCount(rows[r], weekCols),
+                     dist: Math.abs(r - expected) };
+      if (better(cand, best)) best = cand;
+    }
+
+    if (best) {
+      map[key] = { row: best.row + 1, index: best.row, by: 'label', cells: best.data };
+      if (!best.data) {
+        warnings.push(FIGURE_NAMES[key] + ' matched row ' + (best.row + 1) + ', but that row is empty');
+      }
+      return;
+    }
+
+    // No label anywhere. Use the documented offset only if it holds figures —
+    // gviz trims blank rows, so an offset can land a long way from its row.
+    const guessData = rowDataCount(rows[expected], weekCols);
+    if (guessData > 0) {
+      map[key] = { row: expected + 1, index: expected, by: 'offset', cells: guessData };
+      warnings.push(FIGURE_NAMES[key] + ' could not be matched by name; read from row ' +
+                    (expected + 1) + ' by position');
+    } else {
+      map[key] = { row: null, index: -1, by: 'missing', cells: 0 };
+      warnings.push(FIGURE_NAMES[key] + ' could not be found in this sheet');
+    }
+  });
+
+  return { dateRow: dateRow, weekCols: weekCols, map: map, warnings: warnings };
 }
 
 /**
@@ -1184,45 +1354,64 @@ function csvDate(v) {
 }
 
 function snapshotFromRows(rows) {
-  const labelled = findLabelledRows(rows);
-
-  // Prefer the labelled week row; fall back to sniffing for dates.
-  const dateRow = (labelled.weekDates !== undefined) ? labelled.weekDates : findWeekDateRow(rows);
-  if (dateRow < 0) {
+  const res = resolveRows(rows);
+  if (res.dateRow < 0) {
     const snap = { version: SNAPSHOT_VERSION, weekly: [], accounts: {} };
     snap.diagnostic = 'received ' + rows.length + ' rows; found no "Week Commencing" label and no row holding 5 or more dates';
     return snap;
   }
 
-  // Each row: by label if the sheet named it, else by offset from the week row.
-  const resolved = {};
-  const row = function (key, offset) {
-    const idx = (labelled[key] !== undefined) ? labelled[key] : dateRow + offset;
-    resolved[key] = { row: idx + 1, by: (labelled[key] !== undefined) ? 'label' : 'offset' };
-    return rows[idx] || [];
+  const resolved = res.map;
+  const warnings = res.warnings.slice();
+
+  // A row that was never located, or that holds no figures at all, is treated
+  // as absent so the reconciliation below can derive it. A row that IS present
+  // but blank in one week stays a genuine zero for that week.
+  const at = function (key) {
+    const info = resolved[key];
+    if (!info || info.index < 0 || info.cells === 0) return null;
+    return rows[info.index] || null;
   };
 
-  const dates = rows[dateRow] || [];
-  const opening = row('opening', ROW_OFFSET.opening);
-  const sales = row('sales', ROW_OFFSET.sales);
-  const otherIn = row('otherIncome', ROW_OFFSET.otherIncome);
-  const receipts = row('receipts', ROW_OFFSET.receipts);
-  const supplier = row('supplier', ROW_OFFSET.supplier);
-  const paymentsOut = row('paymentsOut', ROW_OFFSET.paymentsOut);
-  const closing = row('closing', ROW_OFFSET.closing);
+  const dates = rows[res.dateRow] || [];
+  const opening     = at('opening');
+  const salesRow    = at('sales');
+  const otherRow    = at('otherIncome');
+  const receiptsRow = at('receipts');
+  const supplierRow = at('supplier');
+  const paymentsRow = at('paymentsOut');
+  const closingRow  = at('closing');
 
+  let derivedIn = 0, derivedOut = 0, derivedClose = 0;
   const weekly = [];
+
   for (let col = 0; col < dates.length; col++) {
     const d = csvDate(dates[col]);
     if (!d || d.getUTCFullYear() < 2020 || d.getUTCFullYear() > 2100) continue;
 
-    const open = csvNum(opening[col]);
-    const totalIn = csvNum(receipts[col]);
-    const totalOut = csvNum(paymentsOut[col]);
-    const rawClose = closing[col];
-    const close = (rawClose === '' || rawClose === null || rawClose === undefined)
-      ? open + totalIn - totalOut
-      : csvNum(rawClose);
+    const cell = function (row) { return row ? csvNum(row[col]) : null; };
+
+    const open  = cell(opening) || 0;
+    const sales = cell(salesRow) || 0;
+    const other = cell(otherRow) || 0;
+    const supp  = cell(supplierRow) || 0;
+
+    let totalIn  = cell(receiptsRow);
+    let totalOut = cell(paymentsRow);
+    let close    = cell(closingRow);
+
+    // Reconcile whatever is missing from what is present, via the identity
+    //   closing = opening + in - out
+    // A sheet that names its receipts or payments rows unusually still yields
+    // real cash movement instead of a column of zeros.
+    if (totalIn === null && (salesRow || otherRow)) { totalIn = sales + other; derivedIn++; }
+    if (totalOut === null && close !== null && totalIn !== null) { totalOut = open + totalIn - close; derivedOut++; }
+    if (totalIn === null && close !== null && totalOut !== null) { totalIn = close - open + totalOut; derivedIn++; }
+    if (close === null && totalIn !== null && totalOut !== null) { close = open + totalIn - totalOut; derivedClose++; }
+
+    if (totalIn === null) totalIn = 0;
+    if (totalOut === null) totalOut = 0;
+    if (close === null) close = open + totalIn - totalOut;
 
     const iso = d.toISOString().slice(0, 10);
     const dd = ('0' + d.getUTCDate()).slice(-2);
@@ -1231,13 +1420,25 @@ function snapshotFromRows(rows) {
       iso: iso,
       label: dd + ' ' + MONTH_ABBR[d.getUTCMonth()] + ' ' + String(d.getUTCFullYear()).slice(2),
       opening: open,
-      sales: csvNum(sales[col]),
-      other_income: csvNum(otherIn[col]),
+      sales: sales,
+      other_income: other,
       total_in: totalIn,
-      supplier: csvNum(supplier[col]),
+      supplier: supp,
       total_out: totalOut,
       closing: close
     });
+  }
+
+  // Record derivation so the Connect panel can show where a figure came from.
+  if (derivedIn)    resolved.receipts    = Object.assign({}, resolved.receipts,    { by: 'derived', from: 'Total Sales + Total Other Income' });
+  if (derivedOut)   resolved.paymentsOut = Object.assign({}, resolved.paymentsOut, { by: 'derived', from: 'opening + cash in - closing' });
+  if (derivedClose) resolved.closing     = Object.assign({}, resolved.closing,     { by: 'derived', from: 'opening + cash in - cash out' });
+
+  const noMovement = weekly.length > 0 && weekly.every(function (w) {
+    return w.total_in === 0 && w.total_out === 0;
+  });
+  if (noMovement) {
+    warnings.push('Read ' + weekly.length + ' weeks but found no money in or out on any of them');
   }
 
   const todayIso = new Date().toISOString().slice(0, 10);
@@ -1251,6 +1452,7 @@ function snapshotFromRows(rows) {
     currentWeekIdx: currentIdx,
     weekly: weekly,
     rowMap: resolved,
+    parseWarnings: warnings,
     // CSV export covers the Working Account only; leave the rest to fallbacks.
     accounts: cw ? { working: { label: 'Working Account', opening: cw.opening, closing: cw.closing } } : {}
   };
@@ -1262,31 +1464,42 @@ function snapshotFromRows(rows) {
  * located by matching the week date, falling back to the last populated one.
  */
 function accountFromRows(rows, currentIso) {
-  const labelled = findLabelledRows(rows);
-  const dateRow = (labelled.weekDates !== undefined) ? labelled.weekDates : findWeekDateRow(rows);
+  const res = resolveRows(rows);
+  const dateRow = res.dateRow;
+  const openInfo = res.map.opening;
+  const closeInfo = res.map.closing;
 
-  const openingRow = (labelled.opening !== undefined) ? rows[labelled.opening]
-                   : (dateRow >= 0 ? rows[dateRow + ROW_OFFSET.opening] : null);
-  const closingRow = (labelled.closing !== undefined) ? rows[labelled.closing]
-                   : (dateRow >= 0 ? rows[dateRow + ROW_OFFSET.closing] : null);
+  const openingRow = (openInfo && openInfo.index >= 0) ? rows[openInfo.index] : null;
+  const closingRow = (closeInfo && closeInfo.index >= 0) ? rows[closeInfo.index] : null;
   if (!openingRow && !closingRow) return null;
 
+  const dates = dateRow >= 0 ? (rows[dateRow] || []) : [];
   let col = -1;
+  let asOf = null;
+  let stale = false;
 
   // Match the week the dashboard is showing.
   if (dateRow >= 0 && currentIso) {
-    const dates = rows[dateRow] || [];
     for (let c = 0; c < dates.length; c++) {
       const d = csvDate(dates[c]);
-      if (d && d.toISOString().slice(0, 10) === currentIso) { col = c; break; }
+      if (d && d.toISOString().slice(0, 10) === currentIso) { col = c; asOf = currentIso; break; }
     }
   }
 
-  // Otherwise the rightmost column carrying a balance.
+  // Otherwise the rightmost column that carries a balance. An all-zero row is
+  // a real $0 balance, not a parse failure, so a populated-but-zero cell counts
+  // — the Profit Reinvestment tab is legitimately empty and used to be reported
+  // as "tab not found", which sent people looking for a tab that was there.
   if (col < 0 && closingRow) {
     for (let c = closingRow.length - 1; c >= 0; c--) {
       const v = closingRow[c];
-      if (v !== '' && v !== null && v !== undefined && csvNum(v) !== 0) { col = c; break; }
+      if (v !== '' && v !== null && v !== undefined) { col = c; break; }
+    }
+    // The figure is real but not from the week on screen — date it so a stale
+    // balance is never passed off as current.
+    if (col >= 0 && dateRow >= 0) {
+      const d = csvDate(dates[col]);
+      if (d) { asOf = d.toISOString().slice(0, 10); stale = asOf !== currentIso; }
     }
   }
   if (col < 0) return null;
@@ -1294,7 +1507,9 @@ function accountFromRows(rows, currentIso) {
   return {
     opening: openingRow ? csvNum(openingRow[col]) : 0,
     closing: closingRow ? csvNum(closingRow[col]) : 0,
-    matchedWeek: col >= 0 && dateRow >= 0 && rows[dateRow] ? String(rows[dateRow][col] || '') : ''
+    asOf: asOf,
+    stale: stale,
+    matchedWeek: dateRow >= 0 && rows[dateRow] ? String(rows[dateRow][col] || '') : ''
   };
 }
 
@@ -1349,6 +1564,24 @@ const ACCOUNT_TABS = [
   { key: 'savings',    sheet: 'Business Savings Account',      label: 'Savings Account',     required: false },
   { key: 'profit',     sheet: 'Profit Reinvest. Bank Account', label: 'Profit Reinvestment', required: false }
 ];
+
+// Google matches a tab name exactly. These are the wordings each tab has been
+// seen under, tried in order — the canonical name first.
+const TAB_ALIASES = {
+  'Business Working Account': [
+    'Business Working Account', 'Working Account', 'Business Working'
+  ],
+  'Regulation Bank Account': [
+    'Regulation Bank Account', 'Regulation Account', 'Regulations Bank Account'
+  ],
+  'Business Savings Account': [
+    'Business Savings Account', 'Business Savings Bank Account', 'Savings Account', 'Business Savings'
+  ],
+  'Profit Reinvest. Bank Account': [
+    'Profit Reinvest. Bank Account', 'Profit Reinvest Bank Account',
+    'Profit Reinvestment Bank Account', 'Profit Reinvestment Account', 'Profit Reinvestment'
+  ]
+};
 
 // Balances move slowly; re-reading three extra tabs every 5 seconds would
 // triple the proxy traffic for almost no benefit.
@@ -1419,8 +1652,14 @@ function candidateUrls(source, sheetName) {
 
   // By tab NAME first. The dashboard needs a specific tab — a gid copied from
   // the address bar is just whichever one happened to be open.
-  list.push(base + '/gviz/tq?tqx=out:csv&headers=0&sheet=' + encodeURIComponent(tab));
-  list.push(base + '/export?format=csv&sheet=' + encodeURIComponent(tab));
+  //
+  // Google matches the tab name exactly, so a rename or a stray space breaks
+  // the read with no useful error. Try the known variants of each name before
+  // giving up on the tab.
+  (TAB_ALIASES[tab] || [tab]).forEach(function (name) {
+    list.push(base + '/gviz/tq?tqx=out:csv&headers=0&sheet=' + encodeURIComponent(name));
+    list.push(base + '/export?format=csv&sheet=' + encodeURIComponent(name));
+  });
 
   // The gid and first-tab fallbacks only make sense for the working account;
   // for a named secondary tab they would silently return the wrong one.
@@ -1504,12 +1743,35 @@ async function tryFetchUrl(target, rawRows) {
   return { error: 'unrecognised payload from the sync service' };
 }
 
-/** Fetch one account tab, returning its raw rows or null. */
+/**
+ * Does this grid carry a sales breakdown? Only the working account does, so
+ * this tells a working-account grid apart from a secondary account tab.
+ */
+function hasSalesRows(rows) {
+  for (let i = 0; i < rows.length; i++) {
+    if (rowLabelRank(rows[i] || [], 'sales')) return true;
+  }
+  return false;
+}
+
+/**
+ * Fetch one account tab, returning its raw rows or null.
+ *
+ * Google answers `sheet=<name>` with the FIRST tab in the spreadsheet when
+ * that name does not exist — HTTP 200, no error, no warning. Left unchecked, a
+ * renamed or deleted secondary tab silently shows the working account's
+ * opening and closing balances under another account's name, which is exactly
+ * the sort of plausible-looking wrong figure this dashboard must never print.
+ * So a grid that looks like the working account is rejected for any other tab.
+ */
 async function fetchTabRows(source, sheetName) {
   const targets = candidateUrls(source, sheetName);
+  const wantWorking = sheetName === WORKING_SHEET_NAME;
   for (let i = 0; i < targets.length; i++) {
     const res = await tryFetchUrl(targets[i], true);
-    if (res.rows) return res.rows;
+    if (!res.rows) continue;
+    if (!wantWorking && hasSalesRows(res.rows)) continue;   // wrong tab came back
+    return res.rows;
   }
   return null;
 }
@@ -1777,36 +2039,60 @@ function renderConnect() {
     html += '<div style="font-size:8px;color:#d0dbd6;opacity:.5;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">' +
             'Account tabs read — ' + okCount + ' of ' + ACCOUNT_TABS.length + '</div>';
     html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:2px 14px;">' + rows + '</div>';
+
+    // Everything else at the bottom of the spreadsheet. Only the Apps Script
+    // bridge can list tabs, so this is absent on the CSV path.
+    if (sync.otherTabs && sync.otherTabs.length) {
+      html += '<div style="font-size:9px;color:#d0dbd6;opacity:.55;margin-top:8px;line-height:1.6;">' +
+              sync.otherTabs.length + ' other tab' + (sync.otherTabs.length === 1 ? '' : 's') +
+              ' in this spreadsheet, not read by the dashboard: <span style="opacity:.8;">' +
+              sync.otherTabs.join(', ') + '</span></div>';
+    }
     html += '</div>';
   }
 
   // Which sheet row each figure came from. Silent zeros almost always mean a
   // row was matched by position instead of by its label, so show the mapping.
   if (sync.rowMap) {
-    const LABELS = {
-      opening: 'Opening Bank Balance', sales: 'Total Sales',
-      otherIncome: 'Total Other Income', receipts: 'Total Receipts',
-      supplier: 'Total Supplier Payments', paymentsOut: 'Total Payments Out',
-      closing: 'Closing Bank Balance'
+    // label = matched by name; offset = located by position; derived =
+    // reconstructed from the other figures; missing = not in the sheet at all.
+    const STATE = {
+      label:   { color: '#ccf492', note: function (i) { return 'row ' + i.row; } },
+      offset:  { color: '#f59e0b', note: function (i) { return 'row ' + i.row + ' (guessed)'; } },
+      derived: { color: '#3b82f6', note: function (i) { return 'calculated'; } },
+      missing: { color: '#ef4444', note: function ()  { return 'not found'; } }
     };
-    const guessed = Object.keys(sync.rowMap).filter(function (k) { return sync.rowMap[k].by === 'offset'; });
+    const count = function (by) {
+      return Object.keys(sync.rowMap).filter(function (k) { return sync.rowMap[k].by === by; }).length;
+    };
+
     html += '<div style="padding-top:10px;margin-top:10px;border-top:1px solid rgba(49,81,80,.3);">';
     html += '<div style="font-size:8px;color:#d0dbd6;opacity:.5;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Rows read from the sheet</div>';
-    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:2px 14px;">';
-    Object.keys(LABELS).forEach(function (k) {
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:2px 14px;">';
+    ROW_KEYS.forEach(function (k) {
       const info = sync.rowMap[k];
-      if (!info) return;
-      const byLabel = info.by === 'label';
-      html += '<div style="display:flex;justify-content:space-between;font-size:9px;">' +
-              '<span style="color:#d0dbd6;opacity:.6;">' + LABELS[k] + '</span>' +
-              '<span style="color:' + (byLabel ? '#ccf492' : '#f59e0b') + ';font-weight:600;">row ' + info.row +
-              (byLabel ? '' : ' (guessed)') + '</span></div>';
+      if (!info || k === 'weekDates') return;
+      const st = STATE[info.by] || STATE.missing;
+      html += '<div style="display:flex;justify-content:space-between;font-size:9px;gap:8px;">' +
+              '<span style="color:#d0dbd6;opacity:.6;">' + FIGURE_NAMES[k] + '</span>' +
+              '<span style="color:' + st.color + ';font-weight:600;white-space:nowrap;" ' +
+              (info.from ? 'title="' + info.from + '"' : '') + '>' + st.note(info) + '</span></div>';
     });
     html += '</div>';
-    if (guessed.length) {
+
+    if (count('derived')) {
+      html += '<div style="font-size:9px;color:#3b82f6;opacity:.9;margin-top:8px;line-height:1.6;">' +
+              count('derived') + ' figure' + (count('derived') === 1 ? '' : 's') + ' could not be found by name and ' +
+              'were calculated from the others using <em>closing = opening + in − out</em>. They are correct, but ' +
+              'naming the rows in the sheet is more reliable.</div>';
+    }
+    if (count('offset') || count('missing')) {
       html += '<div style="font-size:9px;color:#f59e0b;opacity:.85;margin-top:8px;line-height:1.6;">' +
-              guessed.length + ' row' + (guessed.length === 1 ? '' : 's') + ' could not be found by label and ' +
-              'were located by position instead. If figures look wrong, check the label text in column B of the sheet.</div>';
+              'Some rows could not be matched by name. Check the label text in the left-hand column of the sheet.</div>';
+    }
+    if (sync.parseWarnings) {
+      html += '<div style="font-size:9px;color:#d0dbd6;opacity:.6;margin-top:8px;line-height:1.7;">· ' +
+              sync.parseWarnings.join('<br>· ') + '</div>';
     }
     html += '</div>';
   }
@@ -1868,6 +2154,9 @@ function disconnectSheet() {
   sync.sheetId = null;
   sync.lastUpdated = null;
   sync.tabStatus = null;
+  sync.otherTabs = null;
+  sync.rowMap = null;
+  sync.parseWarnings = null;
   sync.lastSecondaryAt = 0;
   ACCOUNTS_LIVE_KEYS = {};
   clearStoredSource();

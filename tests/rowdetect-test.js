@@ -1,7 +1,8 @@
 // Exercise the row-detection and URL-candidate logic against layouts that
 // mirror the real spreadsheet, including gviz's row-trimming behaviour.
 const fs = require('fs');
-const src = fs.readFileSync('/home/user/cashflow-dashboard/index.html', 'utf8');
+const path = require('path');
+const src = fs.readFileSync(path.resolve(__dirname, '..', 'index.html'), 'utf8');
 const grab = (name) => {
   const i = src.indexOf('function ' + name + '(');
   if (i < 0) throw new Error('not found: ' + name);
@@ -18,11 +19,17 @@ const WORKING_SHEET_NAME = 'Business Working Account';
 // One eval so the consts share a scope with the functions that close over them.
 eval([
   pick(/const CSV_ROW = \{[^}]*\};/),
-  pick(/const ROW_OFFSET = \{[\s\S]*?\};/),
+  pick(/const ROW_OFFSET = \{[\s\S]*?\n\};/),
   grab('csvNum'), grab('csvDate'),
-  pick(/const ROW_LABELS = \[[\s\S]*?\n\];/),
-  grab('findLabelledRows'),
-  grab('findWeekDateRow'), grab('weekHasData'), grab('pickCurrentWeek'), grab('snapshotFromRows'),
+  grab('normLabel'),
+  pick(/const ROW_LABELS = \{[\s\S]*?\n\};/),
+  pick(/const ROW_KEYS = [^\n]*/),
+  pick(/const FIGURE_NAMES = \{[\s\S]*?\n\};/),
+  pick(/const LABEL_SCAN_COLS = \d+;/),
+  pick(/const TAB_ALIASES = \{[\s\S]*?\n\};/),
+  grab('rowLabelRank'), grab('rowDataCount'), grab('resolveRows'),
+  grab('findWeekDateRow'), grab('weekHasData'), grab('pickCurrentWeek'),
+  grab('snapshotFromRows'), grab('accountFromRows'),
   grab('candidateUrls'), grab('describeEndpoint')
 ].join('\n'));
 
@@ -187,6 +194,133 @@ t('every candidate passes the proxy allowlist',
 
 t('apps script yields exactly one candidate',
   candidateUrls({ kind: 'appsscript', url: 'https://script.google.com/macros/s/AK/exec' }).length === 1);
+
+// ==========================================================================
+// REGRESSION: the live spreadsheet's own wording.
+//
+// The client reported "$107,000 in total sales but cash in, cash out and net
+// all blank". The sheet names those two rows "Total Business Receipts (Cash
+// Inwards)" and "Total Business Payments (Cash Outwards)", which the original
+// /^total receipts/ and /^total payments out/ patterns never matched. Both
+// fell through to offsets, and because gviz trims blank rows the offsets
+// landed on a supplier row and past the end of the sheet respectively.
+// ==========================================================================
+
+function buildLiveGrid(opts) {
+  const g = buildRealisticGrid(opts);
+  const relabel = (rowNum, text) => { g[rowNum - 1][1] = text; };
+  relabel(76,  'Total Business Receipts (Cash Inwards)');
+  relabel(215, 'Total Business Payments (Cash Outwards)');
+  return g;
+}
+
+const live = snapshotFromRows(buildLiveGrid());
+t('LIVE: "Total Business Receipts (Cash Inwards)" matches',
+  live.rowMap.receipts.by === 'label' && live.rowMap.receipts.row === 76, JSON.stringify(live.rowMap.receipts));
+t('LIVE: "Total Business Payments (Cash Outwards)" matches',
+  live.rowMap.paymentsOut.by === 'label' && live.rowMap.paymentsOut.row === 215, JSON.stringify(live.rowMap.paymentsOut));
+t('LIVE: cash in is not zero', live.weekly[0].total_in === 20000, String(live.weekly[0].total_in));
+t('LIVE: cash out is not zero', live.weekly[0].total_out === 25000, String(live.weekly[0].total_out));
+t('LIVE: net is not zero', live.weekly[0].total_in - live.weekly[0].total_out === -5000);
+t('LIVE: no parse warnings', live.parseWarnings.length === 0, JSON.stringify(live.parseWarnings));
+t('LIVE: identity holds on every week',
+  live.weekly.every(w => Math.abs(w.opening + w.total_in - w.total_out - w.closing) < 1));
+
+// The same sheet as gviz serves it — leading blank rows trimmed away.
+const liveTrimmed = snapshotFromRows(buildLiveGrid().slice(5));
+t('LIVE: survives gviz row-trimming', liveTrimmed.weekly.length === 20, 'weeks=' + liveTrimmed.weekly.length);
+t('LIVE: cash in still correct after trimming', liveTrimmed.weekly[0].total_in === 20000, String(liveTrimmed.weekly[0].total_in));
+
+// --- an unmatched row must never read as a silent zero --------------------
+const noReceipts = buildLiveGrid();
+noReceipts[75][1] = 'Something Else Entirely';
+for (let i = 0; i < 20; i++) noReceipts[75][131 + i] = '';   // and the row is blank
+const derived = snapshotFromRows(noReceipts);
+t('missing receipts row is reported, not silently zeroed',
+  derived.rowMap.receipts.by === 'derived', JSON.stringify(derived.rowMap.receipts));
+t('cash in derived from sales + other income',
+  derived.weekly[0].total_in === 20000, String(derived.weekly[0].total_in));
+t('a derivation raises a parse warning', derived.parseWarnings.length > 0, JSON.stringify(derived.parseWarnings));
+
+// Payments row gone: recover it from the accounting identity.
+const noPayments = buildLiveGrid();
+noPayments[214][1] = 'Nothing To See Here';
+for (let i = 0; i < 20; i++) noPayments[214][131 + i] = '';
+const viaIdentity = snapshotFromRows(noPayments);
+t('cash out recovered via opening + in - closing',
+  viaIdentity.weekly[0].total_out === 25000, String(viaIdentity.weekly[0].total_out));
+t('and it is flagged as derived, not read',
+  viaIdentity.rowMap.paymentsOut.by === 'derived', JSON.stringify(viaIdentity.rowMap.paymentsOut));
+
+// --- a summary block above the detail must not win ------------------------
+const withSummary = buildLiveGrid();
+withSummary[9][1] = 'Total Sales';           // an empty summary line near the top
+const summarySnap = snapshotFromRows(withSummary);
+t('an empty summary row does not outrank the real detail row',
+  summarySnap.rowMap.sales.row === 65, JSON.stringify(summarySnap.rowMap.sales));
+
+// --- a sheet with nothing recognisable must say so ------------------------
+const blankMoney = buildLiveGrid();
+[76, 215, 217].forEach(rowNum => {
+  blankMoney[rowNum - 1][1] = 'Unrecognised';
+  for (let i = 0; i < 20; i++) blankMoney[rowNum - 1][131 + i] = '';
+});
+const noMove = snapshotFromRows(blankMoney);
+t('a sheet with no cash movement warns instead of showing zeros',
+  noMove.parseWarnings.some(w => /no money in or out/i.test(w)) ||
+  noMove.parseWarnings.some(w => /could not be found/i.test(w)), JSON.stringify(noMove.parseWarnings));
+
+// --- secondary account tabs ------------------------------------------------
+// These tabs carry no "Week Commencing" label: the date row is found by
+// sniffing, and opening/closing by their own labels.
+function buildAccountTab(opts) {
+  const o = Object.assign({ weeks: 20, closing: 7059, blankAfter: null }, opts || {});
+  const cols = 3 + o.weeks;
+  const g = Array.from({ length: 26 }, () => Array(cols).fill(''));
+  g[0][1] = 'Weekly Cash Flow Forecast';
+  g[3][1] = 'Opening Bank Balance';
+  g[25][1] = 'Closing Bank Balance';
+  for (let i = 0; i < o.weeks; i++) {
+    const d = new Date(Date.UTC(2025, 5, 26 + i * 7));
+    g[2][2 + i] = ('0' + d.getUTCDate()).slice(-2) + '-' + MONTH_ABBR[d.getUTCMonth()] + '-' + String(d.getUTCFullYear()).slice(2);
+    if (o.blankAfter !== null && i > o.blankAfter) continue;
+    g[3][2 + i] = String(o.closing - 500);
+    g[25][2 + i] = String(o.closing);
+  }
+  return g;
+}
+
+const regTab = accountFromRows(buildAccountTab({}), '2025-07-03');
+t('ACCOUNTS: a secondary tab with no week label still parses', regTab !== null, JSON.stringify(regTab));
+t('ACCOUNTS: closing balance read', regTab && regTab.closing === 7059, JSON.stringify(regTab));
+t('ACCOUNTS: matched week is not flagged stale', regTab && regTab.stale === false, JSON.stringify(regTab));
+
+// The Profit Reinvestment tab: a genuine zero balance. This used to return
+// null, so the card showed a dash and told the user to check a tab that
+// existed and had parsed perfectly well.
+const zeroTab = accountFromRows(buildAccountTab({ closing: 0 }), '2025-07-03');
+t('ACCOUNTS: an all-zero tab is a $0 balance, not a missing tab', zeroTab !== null, JSON.stringify(zeroTab));
+t('ACCOUNTS: and its closing reads as 0', zeroTab && zeroTab.closing === 0, JSON.stringify(zeroTab));
+
+// The Savings tab: real figures, but none for the week on screen.
+const staleTab = accountFromRows(buildAccountTab({ blankAfter: 4 }), '2025-12-25');
+t('ACCOUNTS: an out-of-date tab still returns its last balance', staleTab !== null, JSON.stringify(staleTab));
+t('ACCOUNTS: and is flagged stale so it is not shown as current',
+  staleTab && staleTab.stale === true, JSON.stringify(staleTab));
+t('ACCOUNTS: and carries the date it is actually from',
+  staleTab && staleTab.asOf === '2025-07-24', JSON.stringify(staleTab));
+
+// --- tab-name aliases -----------------------------------------------------
+const profitUrls = candidateUrls({ kind: 'sheet', id: ID, gid: null }, 'Profit Reinvest. Bank Account');
+t('ALIASES: the canonical tab name is tried first',
+  profitUrls[0].includes(encodeURIComponent('Profit Reinvest. Bank Account')), profitUrls[0]);
+t('ALIASES: a renamed tab is also attempted',
+  profitUrls.some(u => u.includes(encodeURIComponent('Profit Reinvestment Bank Account'))),
+  'n=' + profitUrls.length);
+t('ALIASES: no gid/first-tab fallback for a named secondary tab',
+  !profitUrls.some(u => /gid=|format=csv$/.test(u)), JSON.stringify(profitUrls.map(describeEndpoint)));
+t('ALIASES: every aliased URL still passes the proxy allowlist',
+  profitUrls.every(u => ALLOWED.has(new URL(u).hostname)));
 
 console.log('\n' + pass + '/' + (pass + fail) + ' passed');
 process.exit(fail ? 1 : 0);

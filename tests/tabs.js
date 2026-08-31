@@ -1,7 +1,10 @@
 // All four account tabs: are they fetched, do their balances reach the
 // dashboard, and is an unreadable tab reported rather than filled with a
 // placeholder that looks real?
-const { chromium } = require('/opt/node22/lib/node_modules/playwright');
+const { chromium } = require('playwright');
+const isolate = require('./isolate');
+// Playwright's own bundled Chromium by default; CHROME_PATH overrides it.
+const LAUNCH = process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {};
 const http = require('http');
 const STUB = require('fs').readFileSync(__dirname + '/stub.js', 'utf8');
 
@@ -13,8 +16,9 @@ const T = [];
 const check = (n, p, d = '') => T.push({ n, p: !!p, d });
 
 async function session(pre) {
-  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const browser = await chromium.launch(LAUNCH);
   const page = await browser.newPage();
+  await isolate(page);
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   await page.addInitScript('window.__clientRow = null;');

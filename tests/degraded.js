@@ -1,4 +1,7 @@
-const { chromium } = require('/opt/node22/lib/node_modules/playwright');
+const { chromium } = require('playwright');
+const isolate = require('./isolate');
+// Playwright's own bundled Chromium by default; CHROME_PATH overrides it.
+const LAUNCH = process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {};
 const fs = require('fs');
 const STUB = fs.readFileSync(__dirname + '/stub.js', 'utf8');
 
@@ -6,8 +9,9 @@ const T = [];
 const check = (n, p, d='') => T.push({ n, p: !!p, d });
 
 async function scenario(name, pre, body) {
-  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const browser = await chromium.launch(LAUNCH);
   const page = await browser.newPage();
+  await isolate(page);
   const errs = [];
   page.on('pageerror', e => errs.push(e.message));
   if (pre) await page.addInitScript(pre);

@@ -1,0 +1,14 @@
+# Test tooling. Playwright is ~19MB and is never needed to build or serve the
+# site — the dashboard is static and has no runtime dependencies.
+node_modules/
+package-lock.json
+
+# Netlify
+.netlify/
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Client voice notes and transcripts — working material, not part of the app.
+client_feedback/
