@@ -72,7 +72,23 @@ function date_(v) {
   if (typeof v === 'number' && v > 20000 && v < 80000) {
     return new Date(Math.round((v - 25569) * 86400000));
   }
-  var d = new Date(String(v));
+
+  var s = String(v).trim();
+  if (!s) return null;
+
+  // dd-Mon-yy / dd Mon yy, the format the sheet displays. getValues() normally
+  // hands back real Date objects, but a text-formatted column arrives as a
+  // string and new Date() reads "20-Aug-26" inconsistently across engines.
+  var m = s.match(/^(\d{1,2})[-\s]([A-Za-z]{3})[a-z]*[-\s](\d{2,4})$/);
+  if (m) {
+    var mi = MONTH_ABBR.indexOf(m[2].charAt(0).toUpperCase() + m[2].slice(1, 3).toLowerCase());
+    if (mi >= 0) {
+      var yr = m[3].length === 2 ? 2000 + parseInt(m[3], 10) : parseInt(m[3], 10);
+      return new Date(Date.UTC(yr, mi, parseInt(m[1], 10)));
+    }
+  }
+
+  var d = new Date(s);
   return isNaN(d.getTime()) ? null : d;
 }
 

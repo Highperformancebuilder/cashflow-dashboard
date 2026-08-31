@@ -1075,6 +1075,15 @@ function applySnapshot(snap, origin) {
   // Only the Apps Script bridge can enumerate tabs — a CSV endpoint cannot.
   if (snap.otherTabs) sync.otherTabs = snap.otherTabs;
 
+  // The Apps Script snapshot names the spreadsheet it was built from. Adopting
+  // it is what lets the realtime subscription start when the connection was
+  // made with an /exec URL: the websocket is keyed on sheet_id, and connecting
+  // by script URL alone would otherwise leave the dashboard polling forever.
+  if (!sync.sheetId && snap.sheetId) {
+    sync.sheetId = snap.sheetId;
+    if (sync.mode !== 'realtime' && !sync.channel) startRealtime();
+  }
+
   rebuildDerived();
   renderAll();
 
@@ -1650,15 +1659,15 @@ function candidateUrls(source, sheetName) {
   const base = 'https://docs.google.com/spreadsheets/d/' + source.id;
   const list = [];
 
-  // By tab NAME first. The dashboard needs a specific tab — a gid copied from
-  // the address bar is just whichever one happened to be open.
+  // By tab NAME. Only the gviz endpoint honours `sheet=<name>`; measured
+  // against the live spreadsheet, /export?format=csv&sheet=<name> ignores the
+  // name completely and always returns the FIRST tab, so asking it for a
+  // secondary tab can only ever produce the wrong one.
   //
-  // Google matches the tab name exactly, so a rename or a stray space breaks
-  // the read with no useful error. Try the known variants of each name before
-  // giving up on the tab.
+  // gviz matches the name exactly, so a rename or a stray space breaks the
+  // read — try the known variants before giving up on the tab.
   (TAB_ALIASES[tab] || [tab]).forEach(function (name) {
     list.push(base + '/gviz/tq?tqx=out:csv&headers=0&sheet=' + encodeURIComponent(name));
-    list.push(base + '/export?format=csv&sheet=' + encodeURIComponent(name));
   });
 
   // The gid and first-tab fallbacks only make sense for the working account;
@@ -1770,7 +1779,10 @@ async function fetchTabRows(source, sheetName) {
   for (let i = 0; i < targets.length; i++) {
     const res = await tryFetchUrl(targets[i], true);
     if (!res.rows) continue;
-    if (!wantWorking && hasSalesRows(res.rows)) continue;   // wrong tab came back
+    // The check runs both ways: a grid with a sales breakdown is the working
+    // account and belongs to no other tab, and a grid without one is not the
+    // working account no matter which endpoint returned it.
+    if (hasSalesRows(res.rows) !== wantWorking) continue;
     return res.rows;
   }
   return null;
@@ -1825,12 +1837,29 @@ async function fetchFromSource(source, includeSecondary) {
 }
 
 /** The working-account tab: the weekly series everything else derives from. */
+/**
+ * Is this snapshot really the working account?
+ *
+ * Google answers an unknown `sheet=` name with the FIRST tab, so a wrong tab
+ * can come back looking superficially valid — a secondary account tab has week
+ * dates and balances and would parse into a plausible weekly series with cash
+ * in and out silently derived. Only the working account carries a sales row.
+ */
+function looksLikeWorkingSnapshot(snap) {
+  if (!snap) return false;
+  // No rowMap means we cannot tell; do not reject on a guess.
+  if (!snap.rowMap || !snap.rowMap.sales) return true;
+  // A sheet with no labels at all still resolves its sales row by offset, so
+  // only an outright absent row disqualifies the tab.
+  return snap.rowMap.sales.by !== 'missing';
+}
+
 async function fetchPrimary(source) {
   // Fast path: an endpoint that already worked for this source.
   if (source.resolvedUrl) {
     const quick = await tryFetchUrl(source.resolvedUrl);
-    if (quick.snapshot) return quick.snapshot;
-    // It stopped working — fall through and probe again.
+    if (quick.snapshot && looksLikeWorkingSnapshot(quick.snapshot)) return quick.snapshot;
+    // It stopped working, or started returning a different tab — probe again.
     source.resolvedUrl = null;
   }
 
@@ -1840,9 +1869,13 @@ async function fetchPrimary(source) {
   const attempts = [];
   for (let i = 0; i < targets.length; i++) {
     const result = await tryFetchUrl(targets[i]);
-    if (result.snapshot) {
+    if (result.snapshot && looksLikeWorkingSnapshot(result.snapshot)) {
       source.resolvedUrl = targets[i];
       return result.snapshot;
+    }
+    if (result.snapshot) {
+      attempts.push(describeEndpoint(targets[i]) + ' — returned a tab with no sales rows (not the working account)');
+      continue;
     }
     attempts.push(describeEndpoint(targets[i]) + ' — ' + result.error);
   }

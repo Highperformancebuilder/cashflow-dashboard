@@ -30,6 +30,7 @@ eval([
   grab('rowLabelRank'), grab('rowDataCount'), grab('resolveRows'),
   grab('findWeekDateRow'), grab('weekHasData'), grab('pickCurrentWeek'),
   grab('snapshotFromRows'), grab('accountFromRows'),
+  grab('hasSalesRows'), grab('looksLikeWorkingSnapshot'),
   grab('candidateUrls'), grab('describeEndpoint')
 ].join('\n'));
 
@@ -321,6 +322,49 @@ t('ALIASES: no gid/first-tab fallback for a named secondary tab',
   !profitUrls.some(u => /gid=|format=csv$/.test(u)), JSON.stringify(profitUrls.map(describeEndpoint)));
 t('ALIASES: every aliased URL still passes the proxy allowlist',
   profitUrls.every(u => ALLOWED.has(new URL(u).hostname)));
+
+// ==========================================================================
+// WRONG-TAB GUARD.
+//
+// Measured against the live spreadsheet: Google answers `sheet=<name>` with
+// the FIRST tab whenever that name does not exist — HTTP 200, no error. And
+// /export?format=csv&sheet=<name> ignores the name outright, always returning
+// the first tab. Unguarded, a renamed secondary tab shows the working
+// account's balances under another account's name.
+// ==========================================================================
+
+t('GUARD: the working grid is recognised by its sales rows',
+  hasSalesRows(buildLiveGrid()) === true);
+t('GUARD: a secondary account tab has none',
+  hasSalesRows(buildAccountTab({})) === false);
+t('GUARD: a working snapshot is accepted',
+  looksLikeWorkingSnapshot(snapshotFromRows(buildLiveGrid())) === true);
+
+// A secondary tab returned where the working account was asked for: its sales
+// row is absent entirely, so the snapshot must be rejected rather than parsed
+// into a plausible weekly series with cash in and out silently derived.
+const secondaryAsPrimary = snapshotFromRows(buildAccountTab({}));
+t('GUARD: a secondary tab is rejected as the working account',
+  looksLikeWorkingSnapshot(secondaryAsPrimary) === false,
+  JSON.stringify(secondaryAsPrimary.rowMap && secondaryAsPrimary.rowMap.sales));
+
+// A sheet with no labels at all still resolves sales by offset — that is a
+// real working account and must not be rejected.
+t('GUARD: an unlabelled working sheet is still accepted',
+  looksLikeWorkingSnapshot(guessedSnap) === true, JSON.stringify(guessedSnap.rowMap.sales));
+
+// --- endpoint selection ----------------------------------------------------
+const secondaryUrls = candidateUrls({ kind: 'sheet', id: ID, gid: null }, 'Regulation Bank Account');
+t('ENDPOINTS: only gviz is used for a secondary tab (export ignores sheet=)',
+  secondaryUrls.every(u => u.includes('/gviz/')), JSON.stringify(secondaryUrls.map(describeEndpoint)));
+t('ENDPOINTS: no export?sheet= candidate survives',
+  !secondaryUrls.some(u => /\/export\?format=csv&sheet=/.test(u)), JSON.stringify(secondaryUrls));
+
+const workingUrls = candidateUrls({ kind: 'sheet', id: ID, gid: '457366843' });
+t('ENDPOINTS: the working tab still gets the raw-grid export fallbacks',
+  workingUrls.some(u => /\/export\?format=csv&gid=/.test(u)) &&
+  workingUrls.some(u => /\/export\?format=csv$/.test(u)),
+  JSON.stringify(workingUrls.map(describeEndpoint)));
 
 console.log('\n' + pass + '/' + (pass + fail) + ' passed');
 process.exit(fail ? 1 : 0);

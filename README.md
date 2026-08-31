@@ -67,6 +67,17 @@ that works, so a `gid` in the pasted URL (whichever tab happened to be open
 when the link was copied) never overrides the named tab. If every endpoint
 fails, the error lists what each one reported.
 
+> **Google returns the wrong tab rather than an error.** Measured against the
+> live spreadsheet: `gviz/tq?...&sheet=<name>` answers with the **first tab**
+> when `<name>` does not exist — HTTP 200, no warning — and
+> `/export?format=csv&sheet=<name>` ignores the name outright, always returning
+> the first tab. So a renamed secondary tab would otherwise show the working
+> account's balances under another account's name. Every fetch is therefore
+> checked against the tab it was meant to be: only the working account has a
+> sales breakdown, so a grid with one is rejected for any other tab, and a grid
+> without one is rejected for the working account. `/export?sheet=` is not used
+> for secondary tabs at all, since it can only ever return the wrong one.
+
 The connection is remembered in `localStorage` and, if the `clients` UPDATE
 policy is applied, written back to the signed-in account so it follows the
 user to another browser. **Disconnect** clears both.
@@ -139,11 +150,24 @@ Set **Project Settings → Script Properties**:
 
 Then:
 
-1. Run `testSnapshot()` once and check the log — it should report the week
-   count and the four account balances. Approve the permission prompt.
+1. Run `testSnapshot()` once and approve the permission prompt. The log should
+   report the week count, the four account balances, the row each figure came
+   from, and `every figure matched a row by name`. Any `PARSE WARNINGS` line
+   names exactly what it could not find.
 2. Run `installTrigger()` once. This wires up the onChange trigger.
 3. **Deploy → New deployment → Web app**, with *Execute as: Me* and
    *Who has access: Anyone*. Copy the `/exec` URL into `clients.script_url`.
+
+> **Keep `clients.sheet_id` populated as well as `script_url`.** The realtime
+> websocket subscribes on `sheet_id`; the dashboard can recover it from the
+> snapshot the bridge returns, but setting both means realtime comes up on the
+> first load rather than the second.
+
+The bridge is worth installing even though polling works. Measured against the
+live spreadsheet, one open dashboard polling every 5 seconds is ~720 function
+invocations an hour and ~132 MB/hour through the proxy, because the working
+tab exports 184 KB of CSV each time. The bridge pushes a **38 KB** snapshot
+only when the sheet actually changes, and polls nothing.
 
 ### 3. Netlify
 
