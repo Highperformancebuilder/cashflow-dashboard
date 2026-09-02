@@ -294,7 +294,9 @@ tr:hover td{background:rgba(49,81,80,.08)}
   <span class="lbl">Four Account System</span>
   <div class="good">Your four account structure separates operating cash, tax obligations, savings, and profit reinvestment. Each account has a specific purpose. Never mix them.</div>
 
-  <!-- Rendered by renderAccounts() from the live snapshot. -->
+  <!-- Rendered by renderAccounts() from the live snapshot, for whichever week
+       the Overview navigator is on. -->
+  <div id="accounts-week" style="font-size:10px;color:#d0dbd6;opacity:.75;margin-bottom:10px;letter-spacing:1px;"></div>
   <div id="accounts-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px;"></div>
   <div id="accounts-total"></div>
 
@@ -429,6 +431,8 @@ function showTab(n,b){
   b.classList.add('active');
   if(n==='monthly'){renderMonthly();}
   if(n==='clients'){renderClients();}
+  // Redrawn on open so it reflects the week the navigator is currently on.
+  if(n==='accounts'&&typeof renderAccounts==='function'){renderAccounts();}
   if(n==='connect'&&typeof renderConnect==='function'){renderConnect();}
 }
 
@@ -527,9 +531,14 @@ function stepWeek(dir){
   const newIdx = viewIdx + dir;
   if(newIdx < 0 || newIdx >= WEEKLY.length) return;
   viewIdx = newIdx;
-  Chart.getChart('fy-chart')?.destroy();
-  Chart.getChart('bal-chart')?.destroy();
+  if (typeof Chart !== 'undefined' && Chart.getChart) {
+    // Guarded: Chart.js is a CDN script and may not have loaded.
+    Chart.getChart('fy-chart')?.destroy();
+    Chart.getChart('bal-chart')?.destroy();
+  }
   renderOverview();
+  // The 4 Accounts tab describes the same week, so it moves with the navigator.
+  if (typeof renderAccounts === 'function') renderAccounts();
   // Update back button visibility
   document.getElementById('btn-prev').style.opacity = viewIdx <= 0 ? '0.3' : '1';
   document.getElementById('btn-next').style.opacity = viewIdx >= WEEKLY.length-1 ? '0.3' : '1';
@@ -1054,11 +1063,47 @@ let ACCOUNTS_LIVE = JSON.parse(JSON.stringify(ACCOUNT_FALLBACK));
 // is worse on a cashflow dashboard than an obvious blank.
 let ACCOUNTS_LIVE_KEYS = {};
 
+/**
+ * Balances for one account in a specific week.
+ *
+ * The four tabs do not all run to the same date — Savings stops in Jul 2025,
+ * Profit in Jun 2023 — so a week the Overview is showing may have no column in
+ * a given tab. Rather than showing that account's latest figure as though it
+ * belonged to the week on screen, fall back to the most recent week at or
+ * before it and say which week the figure is actually from.
+ */
+function accountWeek(a, iso) {
+  if (!a) return null;
+  if (!a.weeks) {
+    // No series (sample data, or an older snapshot) — use the stored balance.
+    return { opening: a.opening || 0, closing: a.closing || 0, asOf: a.asOf || null, exact: !a.stale };
+  }
+  if (iso && a.weeks[iso]) {
+    return { opening: a.weeks[iso].opening, closing: a.weeks[iso].closing, asOf: iso, exact: true };
+  }
+  const earlier = Object.keys(a.weeks).filter(function (k) { return !iso || k <= iso; }).sort();
+  if (!earlier.length) return null;
+  const last = earlier[earlier.length - 1];
+  return { opening: a.weeks[last].opening, closing: a.weeks[last].closing, asOf: last, exact: false };
+}
+
 function renderAccounts() {
   const grid = document.getElementById('accounts-grid');
   if (!grid) return;
 
-  const cw = WEEKLY[CW_IDX] || {};
+  // Follow the Overview week navigator, not the current week, so both tabs
+  // always describe the same week.
+  const cw = WEEKLY[viewIdx] || WEEKLY[CW_IDX] || {};
+  const cwIso = cw.iso || null;
+
+  const heading = document.getElementById('accounts-week');
+  if (heading) {
+    heading.innerHTML = cw.label
+      ? 'Week of <strong style="color:#ccf492;">' + cw.label + '</strong>' +
+        (viewIdx === CW_IDX ? ' — current week' : ' — use the Overview navigator to change week')
+      : '';
+  }
+
   let html = '';
 
   ACCOUNT_ORDER.forEach(function (key) {
@@ -1066,11 +1111,16 @@ function renderAccounts() {
     const meta = ACCOUNT_META[key];
     if (!a) return;
 
+    // The working account's weekly series is WEEKLY itself.
+    const wk = key === 'working'
+      ? { opening: cw.opening || 0, closing: cw.closing || 0, asOf: cwIso, exact: !!cw.iso }
+      : accountWeek(a, cwIso);
+
     html += '<div class="card" style="margin:0;border-color:' + meta.border + ';">';
     html += '<div style="font-size:11px;font-weight:700;color:' + meta.color + ';text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">' + (a.label || meta.label) + '</div>';
     html += '<div style="font-size:10px;color:#d0dbd6;opacity:.6;margin-bottom:10px;">' + meta.sub + '</div>';
 
-    const isLive = !sync.source || ACCOUNTS_LIVE_KEYS[key];
+    const isLive = (!sync.source || ACCOUNTS_LIVE_KEYS[key]) && !!wk;
     const money = function (v) {
       return isLive
         ? '<span style="color:' + meta.color + ';font-weight:800;font-size:15px;">' + fmtK(v || 0) + '</span>'
@@ -1078,20 +1128,20 @@ function renderAccounts() {
     };
 
     html += '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;">';
-    html += '<span style="color:#d0dbd6;opacity:.5;">Opening</span>' + money(a.opening) + '</div>';
+    html += '<span style="color:#d0dbd6;opacity:.5;">Opening</span>' + money(wk && wk.opening) + '</div>';
 
     html += '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:10px;">';
-    html += '<span style="color:#d0dbd6;opacity:.5;">Closing</span>' + money(a.closing) + '</div>';
+    html += '<span style="color:#d0dbd6;opacity:.5;">Closing</span>' + money(wk && wk.closing) + '</div>';
 
     if (!isLive) {
       html += '<div style="font-size:9px;color:#f59e0b;opacity:.85;line-height:1.5;margin-bottom:8px;">' +
               'Not read from the sheet — check the <strong>' + ACCOUNT_TAB_NAMES[key] + '</strong> tab exists.</div>';
-    } else if (a.stale && a.asOf) {
-      // The tab was read, but it has no column for the week on screen. Date the
-      // figure rather than letting an old balance read as the current one.
+    } else if (wk && !wk.exact && wk.asOf) {
+      // This tab has no column for the week on screen. Date the figure rather
+      // than letting an older balance read as though it were that week's.
       html += '<div style="font-size:9px;color:#f59e0b;opacity:.85;line-height:1.5;margin-bottom:8px;">' +
-              'Last figure in this tab is from <strong>' + stamp2(a.asOf) + '</strong> — it has not been ' +
-              'updated for the current week.</div>';
+              'No entry for this week — showing the last figure in this tab, from <strong>' +
+              stamp2(wk.asOf) + '</strong>.</div>';
     }
 
     html += '<div style="padding-top:8px;border-top:1px solid rgba(49,81,80,.3);">';
@@ -1122,10 +1172,15 @@ function renderAccounts() {
     ACCOUNT_ORDER.forEach(function (key) {
       const a = ACCOUNTS_LIVE[key] || ACCOUNT_FALLBACK[key];
       if (!a) return;
-      const isLive = !sync.source || ACCOUNTS_LIVE_KEYS[key];
+      // Total the same week the cards above are showing, not the current one.
+      const wk = key === 'working'
+        ? { closing: cw.closing || 0, exact: !!cw.iso, asOf: cwIso }
+        : accountWeek(a, cwIso);
+      const isLive = (!sync.source || ACCOUNTS_LIVE_KEYS[key]) && !!wk;
       if (isLive) {
-        total += (a.closing || 0);
-        breakdown += (a.label || key) + ' ' + fmtK(a.closing || 0) + '<br>';
+        total += (wk.closing || 0);
+        breakdown += (a.label || key) + ' ' + fmtK(wk.closing || 0) +
+                     (wk.exact ? '' : ' <span style="opacity:.6;">(as at ' + stamp2(wk.asOf) + ')</span>') + '<br>';
       } else {
         missing++;
         breakdown += '<span style="opacity:.5;">' + (a.label || key) + ' —</span><br>';
@@ -1137,7 +1192,8 @@ function renderAccounts() {
     }
 
     let t = '<div class="card clime" style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;">';
-    t += '<div><div style="font-size:9px;color:#d0dbd6;opacity:.6;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Total Across All Accounts</div>';
+    t += '<div><div style="font-size:9px;color:#d0dbd6;opacity:.6;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">' +
+         'Total Across All Accounts' + (cw.label ? ' — week of ' + cw.label : '') + '</div>';
     t += '<div style="font-size:26px;font-weight:800;color:' + (total < 0 ? '#ef4444' : '#ccf492') + ';">' + fmtK(total) + '</div></div>';
     t += '<div style="font-size:9px;color:#d0dbd6;opacity:.5;text-align:right;line-height:1.8;">' + breakdown + '</div></div>';
     totalEl.innerHTML = t;
@@ -1730,11 +1786,29 @@ function accountFromRows(rows, currentIso) {
   }
   if (col < 0) return null;
 
+  // The whole series, keyed by week, so the 4 Accounts tab can follow whatever
+  // week the Overview navigator is on rather than being pinned to the current
+  // one. Only columns carrying a date are included.
+  const weeks = {};
+  for (let c = 0; c < dates.length; c++) {
+    const d = csvDate(dates[c]);
+    if (!d || d.getUTCFullYear() < 2020 || d.getUTCFullYear() > 2100) continue;
+    const oCell = openingRow ? openingRow[c] : undefined;
+    const cCell = closingRow ? closingRow[c] : undefined;
+    const blank = (v) => v === '' || v === null || v === undefined;
+    if (blank(oCell) && blank(cCell)) continue;     // the tab stops here
+    weeks[d.toISOString().slice(0, 10)] = {
+      opening: openingRow ? csvNum(oCell) : 0,
+      closing: closingRow ? csvNum(cCell) : 0
+    };
+  }
+
   return {
     opening: openingRow ? csvNum(openingRow[col]) : 0,
     closing: closingRow ? csvNum(closingRow[col]) : 0,
     asOf: asOf,
     stale: stale,
+    weeks: weeks,
     matchedWeek: dateRow >= 0 && rows[dateRow] ? String(rows[dateRow][col] || '') : ''
   };
 }

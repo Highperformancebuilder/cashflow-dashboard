@@ -9,8 +9,8 @@
  *
  * SETUP — see README.md. In short:
  *   Extensions > Apps Script, paste this file, then set Script Properties:
- *     SHEET_ID              the spreadsheet id
- *     SUPABASE_URL          https://<project>.supabase.co
+ *     SHEET_ID              1MXTCOStUpHpGYrthqRb8NCuERbUIeyZcRZVvdG4P15c
+ *     SUPABASE_URL          https://abhmonhsiluraykelrpp.supabase.co
  *     SUPABASE_SERVICE_KEY  service_role key (server-side only, never in the browser)
  *   Run installTrigger() once, then Deploy > New deployment > Web app
  *   (Execute as: Me — Who has access: Anyone).
@@ -381,11 +381,24 @@ function parseAccount_(grid, currentIso) {
   }
   if (target === -1) return null;
 
+  // The whole series, keyed by week, so the dashboard's 4 Accounts tab can
+  // follow whichever week the Overview navigator is on.
+  var weeks = {};
+  for (var w = 0; w < dates.length; w++) {
+    var wd = date_(dates[w]);
+    if (!wd || wd.getUTCFullYear() < 2020 || wd.getUTCFullYear() > 2100) continue;
+    var oCell = opening[w], cCell = closing[w];
+    var blank = function (v) { return v === '' || v === null || v === undefined; };
+    if (blank(oCell) && blank(cCell)) continue;
+    weeks[isoDate_(wd)] = { opening: num_(oCell), closing: num_(cCell) };
+  }
+
   return {
     opening: num_(opening[target]),
     closing: num_(closing[target]),
     asOf: asOf,
-    stale: stale
+    stale: stale,
+    weeks: weeks
   };
 }
 

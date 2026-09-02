@@ -98,6 +98,74 @@ async function session(pre) {
   await s.browser.close();
   await hide('');
 
+  // ---- 5. the 4 Accounts tab follows the Overview week navigator ---------
+  const s3 = await session();
+  const accountsText = async () => {
+    await s3.page.evaluate(() => document.querySelectorAll('.nb')[4].click());
+    await s3.page.waitForTimeout(250);
+    return (await s3.page.textContent('#tab-accounts')).replace(/\s+/g, ' ');
+  };
+  const overviewNums = async () => {
+    await s3.page.evaluate(() => document.querySelectorAll('.nb')[0].click());
+    await s3.page.waitForTimeout(250);
+    return s3.page.evaluate(() => ({
+      week: document.getElementById('cwl').textContent.trim(),
+      open: document.getElementById('ov-open').textContent.trim(),
+      close: document.getElementById('ov-close').textContent.trim(),
+      in: document.getElementById('ov-in').textContent.trim(),
+      out: document.getElementById('ov-out').textContent.trim()
+    }));
+  };
+
+  const ov1 = await overviewNums();
+  const acc1 = await accountsText();
+  check('accounts tab names the week it is showing',
+    acc1.indexOf('Week of') >= 0 && acc1.indexOf(ov1.week.replace(' — Live', '')) >= 0,
+    acc1.slice(0, 110));
+  check('working account opening matches Overview', acc1.indexOf(ov1.open) >= 0,
+    'overview=' + ov1.open);
+  check('working account closing matches Overview', acc1.indexOf(ov1.close) >= 0,
+    'overview=' + ov1.close);
+  check('this-week in matches Overview', acc1.indexOf(ov1.in.replace('-', '')) >= 0, 'overview=' + ov1.in);
+  check('this-week out matches Overview', acc1.indexOf(ov1.out.replace('-', '')) >= 0, 'overview=' + ov1.out);
+
+  // Step back a week on Overview; the accounts tab must move with it.
+  await s3.page.evaluate(() => { document.querySelectorAll('.nb')[0].click(); stepWeek(-1); });
+  await s3.page.waitForTimeout(350);
+  const ov2 = await overviewNums();
+  const acc2 = await accountsText();
+  check('stepping the navigator changes the Overview week', ov2.week !== ov1.week,
+    ov1.week + ' -> ' + ov2.week);
+  check('the accounts tab followed to the same week',
+    acc2.indexOf(ov2.week.replace(' — Live', '')) >= 0, acc2.slice(0, 110));
+  check('  ...and its figures changed too', acc2 !== acc1);
+  check('  ...working opening now matches the new week', acc2.indexOf(ov2.open) >= 0,
+    'overview=' + ov2.open);
+  check('  ...working closing now matches the new week', acc2.indexOf(ov2.close) >= 0,
+    'overview=' + ov2.close);
+
+  // Every account reports a balance for the selected week, from its own series.
+  const perWeek = await s3.page.evaluate(() => {
+    const iso = WEEKLY[viewIdx].iso;
+    const out = {};
+    ACCOUNT_ORDER.forEach(k => {
+      const a = ACCOUNTS_LIVE[k];
+      out[k] = {
+        hasSeries: !!(a && a.weeks && Object.keys(a.weeks).length),
+        wk: accountWeek(a, iso)
+      };
+    });
+    return { iso, out };
+  });
+  ['regulation', 'savings', 'profit'].forEach(k => {
+    check('secondary account "' + k + '" carries a per-week series',
+      perWeek.out[k] && perWeek.out[k].hasSeries, JSON.stringify(perWeek.out[k]));
+    check('  ...and resolves a balance for the selected week',
+      perWeek.out[k] && perWeek.out[k].wk !== null, JSON.stringify(perWeek.out[k] && perWeek.out[k].wk));
+  });
+  check('no page errors while stepping weeks', s3.errors.length === 0, s3.errors.join(' | '));
+  await s3.browser.close();
+
   T.forEach(t => console.log((t.p ? '  PASS  ' : '  FAIL  ') + t.n + (t.d ? '   [' + t.d + ']' : '')));
   const f = T.filter(t => !t.p).length;
   console.log('\n' + (T.length - f) + '/' + T.length + ' passed');
