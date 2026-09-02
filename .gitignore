@@ -1,14 +1,75 @@
-# Test tooling. Playwright is ~19MB and is never needed to build or serve the
-# site — the dashboard is static and has no runtime dependencies.
+# ---------------------------------------------------------------------------
+# Secrets. The Supabase *publishable* key is committed in index.html on purpose
+# — row-level security is what makes that safe. The *service_role* key is not:
+# it bypasses RLS entirely and lives only in Apps Script Script Properties.
+# Nothing resembling an env file should ever reach this repository.
+# ---------------------------------------------------------------------------
+.env
+.env.*
+*.env
+secrets.json
+service-account*.json
+
+# ---------------------------------------------------------------------------
+# Dependencies. Playwright is ~19MB and is only used by the tests — the site is
+# static and has no runtime dependencies at all.
+#
+# Only the ROOT lockfile is ignored: Netlify runs `npm install` whenever it
+# finds one in the base directory, which would make a no-build static site
+# start installing packages. tests/package-lock.json is fine to commit and
+# pins the test tooling.
+# ---------------------------------------------------------------------------
 node_modules/
-package-lock.json
+/package-lock.json
+/package.json
+/yarn.lock
+/pnpm-lock.yaml
 
-# Netlify
+# Python, for the same reason: a root requirements.txt makes Netlify run pip.
+/requirements.txt
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# ---------------------------------------------------------------------------
+# Test output and scratch files.
+# `tests/_*.js` is the convention for throwaway probes — anything prefixed with
+# an underscore is a one-off and should not be committed.
+# ---------------------------------------------------------------------------
+tests/_*.js
+tests/*.png
+tests/screenshots/
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+*.log
+npm-debug.log*
+
+# ---------------------------------------------------------------------------
+# Build / host
+# ---------------------------------------------------------------------------
 .netlify/
+dist/
+build/
+.cache/
 
-# OS noise
+# ---------------------------------------------------------------------------
+# Editors and OS noise
+# ---------------------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*~
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# Client voice notes and transcripts — working material, not part of the app.
-client_feedback/
+# ---------------------------------------------------------------------------
+# Client working material. The written record is worth keeping; the raw audio
+# is a 1MB voice memo that does not belong in source control.
+# ---------------------------------------------------------------------------
+client_feedback/*
+!client_feedback/*.txt
+!client_feedback/*.md

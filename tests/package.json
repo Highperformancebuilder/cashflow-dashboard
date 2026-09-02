@@ -11,7 +11,9 @@
     "test:e2e:nochart": "node e2e.js --no-chart",
     "test:degraded": "node degraded.js",
     "test:connect": "node connect.js",
-    "test:tabs": "node tabs.js"
+    "test:tabs": "node tabs.js",
+    "test:hover": "node hover.js",
+    "test:fyperf": "node fyperf.js"
   },
   "devDependencies": {
     "playwright": "^1.47.0"

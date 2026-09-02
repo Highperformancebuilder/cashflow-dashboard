@@ -96,6 +96,7 @@ than the published CSV, because published CSV is CDN-cached and would defeat
 
 | Path | Purpose |
 |---|---|
+| `TECH_STACK.md` | Dependencies, versions, and what is needed to run or deploy. |
 | `index.html` | The whole dashboard: markup, styles, rendering, sync. |
 | `apps-script/Code.gs` | Paste into the spreadsheet's Apps Script project. The canonical parser. |
 | `netlify/functions/sheet.js` | CORS proxy for Google. Host-allowlisted. |
@@ -303,6 +304,8 @@ npm run test:e2e:nochart      # same, with the Chart.js CDN blocked
 npm run test:degraded         # CDN failures, RLS denial, unlinked account
 npm run test:connect          # Connect tab, validation, 5s update loop
 npm run test:tabs             # all four account tabs, and missing-tab handling
+npm run test:hover            # Overview hover states, and the restyled controls
+npm run test:fyperf           # FY Performance ordering and the year accordion
 ```
 
 Set `CHROME_PATH` to use a browser you already have instead of Playwright's
