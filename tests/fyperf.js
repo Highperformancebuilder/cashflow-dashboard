@@ -264,6 +264,52 @@ const STUB = require('fs').readFileSync(__dirname + '/stub.js', 'utf8');
   check('a negative month still shows its figure in red/amber',
     negText === null || /rgb\(239, 68, 68\)|rgb\(245, 158, 11\)/.test(negText), String(negText));
 
+  // ---- 15. every financial-year row responds to hover ---------------------
+  await page.evaluate(() => { fyPicked = false; renderMonthly(); });
+  await page.waitForTimeout(400);
+
+  const sections = await page.evaluate(() => document.querySelectorAll('#monthly-list .fysec').length);
+  check('year rows use the .fysec class', sections === yrs.length, 'found ' + sections);
+
+  check('no inline border/background left on year rows',
+    (await page.evaluate(() => Array.from(document.querySelectorAll('#monthly-list .fysec'))
+       .filter(el => /border|background|padding/.test(el.getAttribute('style') || '')).length)) === 0);
+
+  const secProbe = async (idx, label) => {
+    const el = page.locator('#monthly-list .fysec').nth(idx);
+    await page.mouse.move(5, 880);
+    await page.waitForTimeout(220);
+    const read = () => el.evaluate(e => {
+      const s = getComputedStyle(e);
+      const r = e.getBoundingClientRect();
+      return {
+        bw: parseFloat(s.borderTopWidth), pad: parseFloat(s.paddingTop),
+        border: s.borderColor, t: s.transform,
+        content: Math.round(r.width - 2 * parseFloat(s.borderLeftWidth) - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight))
+      };
+    });
+    const before = await read();
+    await el.hover();
+    await page.waitForTimeout(320);
+    const after = await read();
+    await page.mouse.move(5, 880);
+    await page.waitForTimeout(200);
+    check(label + ': 1px at rest', before.bw === 1, before.bw + 'px');
+    check(label + ': 3px on hover', after.bw === 3, after.bw + 'px');
+    check(label + ': border brightens', after.border !== before.border,
+      before.border + ' -> ' + after.border);
+    check(label + ': it lifts', after.t !== 'none' && after.t !== before.t, after.t);
+    check(label + ': content does not shift', Math.abs(after.content - before.content) <= 1,
+      before.content + ' -> ' + after.content);
+    return after.border;
+  };
+
+  const curBorder = await secProbe(0, 'Current year row');
+  const doneBorder = await secProbe(1, 'Completed year row');
+  check('each year hovers to its OWN accent, not one shared colour',
+    curBorder !== doneBorder, curBorder + ' vs ' + doneBorder);
+  check('the current year hovers lime', /204, 244, 146/.test(curBorder), curBorder);
+
   check('no page errors', errs.length === 0, errs.join(' | '));
 
   await browser.close();

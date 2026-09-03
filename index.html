@@ -300,9 +300,46 @@ tr:hover td{background:rgba(49,81,80,.08)}
   .oblig:hover { transform: none; }
 }
 
+/* ---------------------------------------------------------------------------
+   FY Performance year sections.
+
+   Each year's accent — lime for the current one, amber for a forward
+   projection, grey once completed — arrives as a custom property rather than
+   an inline border-color, so :hover can brighten the box to that year's own
+   colour instead of being blocked by the inline style.
+   --------------------------------------------------------------------------- */
+.fysec {
+  --pad: 14px;
+  --accent: rgba(49, 81, 80, .8);
+  --accent-dim: rgba(49, 81, 80, .25);
+  --tint: transparent;
+  margin-bottom: 14px;
+  border: 1px solid var(--accent-dim);
+  border-radius: 10px;
+  padding: var(--pad);
+  background: var(--tint);
+  transition: transform .15s ease, border-color .15s ease, border-width .15s ease,
+              padding .15s ease, background-color .15s ease, box-shadow .15s ease;
+}
+.fysec.is-current { --accent: #ccf492; --accent-dim: rgba(204, 244, 146, .2); --tint: rgba(204, 244, 146, .02); }
+.fysec.is-future  { --accent: #f59e0b; --accent-dim: rgba(245, 158, 11, .2);  --tint: rgba(245, 158, 11, .02); }
+
+.fysec:hover {
+  border-width: 3px;
+  padding: calc(var(--pad) - 2px);
+  border-color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .45);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fysec { transition: none; }
+  .fysec:hover { transform: none; }
+}
+
 /* Financial-year accordion headers on the FY Performance tab. */
 .fyhead { transition: opacity .15s ease; }
-.fyhead:hover { opacity: .8; }
+.fysec:hover .fyhead { opacity: 1; }
 .fychev { display: inline-block; transition: transform .15s ease; transform-origin: 50% 50%; }
 
 /* Keyboard users get the same affordance as mouse users. */
@@ -849,13 +886,10 @@ function renderMonthly(){
 
     var headerColor=isCurrent?'#ccf492':isFuture?'#f59e0b':'#d0dbd6';
     var borderColor=isCurrent?'rgba(204,244,146,.3)':isFuture?'rgba(245,158,11,.3)':'rgba(49,81,80,.3)';
-    var sectionStyle=isFuture
-      ? 'margin-bottom:14px;border:1px solid rgba(245,158,11,.2);border-radius:10px;padding:14px;background:rgba(245,158,11,.02);'
-      : isCurrent
-        ? 'margin-bottom:14px;border:1px solid rgba(204,244,146,.2);border-radius:10px;padding:14px;background:rgba(204,244,146,.02);'
-        : 'margin-bottom:14px;border:1px solid rgba(49,81,80,.25);border-radius:10px;padding:14px;';
+    // Styling lives in .fysec; only the state travels here, so :hover can act.
+    var sectionClass='fysec'+(isCurrent?' is-current':isFuture?' is-future':'');
 
-    html+='<div style="'+sectionStyle+'">';
+    html+='<div class="'+sectionClass+'">';
 
     // Clicking the header opens that year and closes the others, so the page
     // is one financial year at a time rather than four screens of scrolling.
