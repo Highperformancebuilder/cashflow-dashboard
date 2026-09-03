@@ -1,0 +1,71 @@
+Greg Jones Cashflow Dashboard — v4
+All four account tabs
+==================================
+
+Supersedes all earlier zips.
+
+WHAT CHANGED IN v4
+------------------
+Only the "Business Working Account" tab was ever being fetched. The other
+three account cards — Regulation, Savings, Profit Reinvestment — were showing
+HARDCODED placeholder figures ($7,059 / $50,000 / $0) that looked exactly like
+live data, and the "Total Across All Accounts" tile added them up as if real.
+
+Now all four tabs are read:
+
+  Business Working Account        the weekly series          (required)
+  Regulation Bank Account         opening + closing balance
+  Business Savings Account        opening + closing balance
+  Profit Reinvest. Bank Account   opening + closing balance
+
+If a tab cannot be read, its card shows a dash and names the tab to check. It
+is excluded from the total, and the total says how many accounts are missing.
+No placeholder is ever shown as though it were a real balance.
+
+The Connect tab now lists all four tabs with their read status ("read" /
+"not read"), so you can verify at a glance.
+
+Balances refresh every 60 seconds; the weekly figures still refresh every 5.
+
+
+CARRIED OVER FROM v3
+--------------------
+- Rows matched by their LABEL in column B, not by row number.
+- Dashboard opens on the most recent week that HAS figures.
+- Year-to-date falls back to the most recent year holding data.
+- Connect tab shows which row each figure was read from.
+
+
+HOW TO APPLY
+------------
+1. Unzip into the ROOT of your repo, overwriting.
+2. rm APPLY.txt
+3. git add -A
+   git commit -m "Read all four account tabs; row matching by label"
+   git push -u origin claude/client-files-review-g1ngpj
+4. Netlify redeploys automatically.
+
+
+HOW TO VERIFY
+-------------
+Open the Connect tab after reloading. You should see:
+
+  ACCOUNT TABS READ — 4 of 4
+    Business Working Account         read
+    Regulation Bank Account          read
+    Business Savings Account         read
+    Profit Reinvest. Bank Account    read
+
+  ROWS READ FROM THE SHEET
+    Opening Bank Balance   row 8      (green = matched by label)
+    Total Receipts         row 76
+    ...
+
+Anything amber means it could not be matched — send me that panel.
+
+
+STILL REQUIRED
+--------------
+- Run supabase/schema.sql (RLS is off until you do).
+- Deploy to Netlify so netlify/functions/sheet.js is live.
+- Share the sheet: Anyone with the link -> Viewer.
