@@ -881,12 +881,15 @@ function renderMonthly(){
       rowMonths.forEach(function(m){
         var isPos=m.net>=0;
         var isTight=m.net<0&&m.net>-20000;
-        var isNeg=m.net<=-20000;
         var nc=isPos?'#ccf492':isTight?'#f59e0b':'#ef4444';
         r+='<td style="vertical-align:top;padding:0;">';
         var isPipeline = triggeredLabels && triggeredLabels[m.label];
-        // Same state vocabulary as the Weekly grid, so both read alike.
-        var mState=(isNeg?' is-neg':isTight?' is-tight':'')+(isPipeline?' is-pipe pipeline-pulse':'');
+        // Every month card carries the same border. The month's health is
+        // already stated by the colour of its Net Cash Movement figure below,
+        // so tinting the border as well made the grid read as a patchwork of
+        // red, amber and grey boxes. The one exception is a pipeline-gap month,
+        // which is an active alert rather than a value range — it pulses.
+        var mState=isPipeline?' is-pipe pipeline-pulse':'';
         r+='<div class="gcard compact'+mState+'">';
         r+='<div style="font-size:11px;font-weight:700;color:#fff;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+m.label+'</div>';
         r+='<div style="padding-top:6px;border-top:1px solid rgba(49,81,80,.3);margin-bottom:6px;">';

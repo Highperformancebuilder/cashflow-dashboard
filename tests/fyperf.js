@@ -221,6 +221,49 @@ const STUB = require('fs').readFileSync(__dirname + '/stub.js', 'utf8');
   check('  ...and no Chart.js instance is left behind', (await page.evaluate(() =>
     typeof moChart === 'undefined' ? 'undef' : moChart)) === null);
 
+  // ---- 14. every month card shares one border colour ----------------------
+  // Colour-coding the borders by value turned the grid into a patchwork; the
+  // month's health is already stated by its Net Cash Movement figure.
+  await page.evaluate(() => { fyPicked = false; renderMonthly(); });
+  await page.waitForTimeout(400);
+
+  const borders = await page.evaluate(() => {
+    const cards = Array.from(document.querySelectorAll('#monthly-list .gcard.compact'));
+    return cards.map(el => ({
+      label: (el.textContent.match(/^[A-Za-z]{3} \d{4}/) || [''])[0],
+      border: getComputedStyle(el).borderColor,
+      width: getComputedStyle(el).borderTopWidth,
+      bg: getComputedStyle(el).backgroundColor,
+      pipe: el.classList.contains('is-pipe'),
+      states: ['is-neg', 'is-tight', 'is-cur'].filter(s => el.classList.contains(s))
+    }));
+  });
+  check('month cards are rendered', borders.length > 0, 'count=' + borders.length);
+
+  const plain = borders.filter(b => !b.pipe);
+  const uniqueBorders = [...new Set(plain.map(b => b.border))];
+  const uniqueBg = [...new Set(plain.map(b => b.bg))];
+  check('EVERY month card has the same border colour', uniqueBorders.length === 1,
+    JSON.stringify(uniqueBorders));
+  check('  ...and the same background', uniqueBg.length === 1, JSON.stringify(uniqueBg));
+  check('  ...and the same border width',
+    [...new Set(plain.map(b => b.width))].length === 1,
+    JSON.stringify([...new Set(plain.map(b => b.width))]));
+  check('no value-based state classes remain on month cards',
+    plain.every(b => b.states.length === 0),
+    JSON.stringify(plain.filter(b => b.states.length).map(b => b.label + ':' + b.states)));
+
+  // A negative month must still be readable — via its figure, not its border.
+  const negText = await page.evaluate(() => {
+    const cards = Array.from(document.querySelectorAll('#monthly-list .gcard.compact'));
+    const neg = cards.find(el => /-\$/.test(el.textContent));
+    if (!neg) return null;
+    const fig = Array.from(neg.querySelectorAll('div')).find(d => /^[+-]\$/.test(d.textContent.trim()));
+    return fig ? getComputedStyle(fig).color : null;
+  });
+  check('a negative month still shows its figure in red/amber',
+    negText === null || /rgb\(239, 68, 68\)|rgb\(245, 158, 11\)/.test(negText), String(negText));
+
   check('no page errors', errs.length === 0, errs.join(' | '));
 
   await browser.close();
