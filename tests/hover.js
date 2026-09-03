@@ -178,6 +178,45 @@ const STUB = require('fs').readFileSync(__dirname + '/stub.js', 'utf8');
     (await page.evaluate(() => document.querySelectorAll('#tab-accounts .oblig').length)) === 4);
   await probe('#tab-accounts .oblig', 'Finance obligation row');
 
+  // ---- border weight: 1px at rest, 3px on hover, no content shift --------
+  const borderProbe = async (tabIdx, selector, label) => {
+    await page.evaluate(i => document.querySelectorAll('.nb')[i].click(), tabIdx);
+    await page.waitForTimeout(350);
+    await page.mouse.move(5, 880);
+    await page.waitForTimeout(250);
+    const el = page.locator(selector).first();
+    const read = () => el.evaluate(e => {
+      const s = getComputedStyle(e);
+      const r = e.getBoundingClientRect();
+      return {
+        bw: parseFloat(s.borderTopWidth),
+        pad: parseFloat(s.paddingTop),
+        // content box = border-box minus borders and padding, both sides
+        content: Math.round(r.width - 2 * parseFloat(s.borderLeftWidth) - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight))
+      };
+    });
+    const before = await read();
+    await el.hover();
+    await page.waitForTimeout(300);
+    const after = await read();
+    await page.mouse.move(5, 880);
+    await page.waitForTimeout(200);
+    check(label + ': 1px at rest', before.bw === 1, 'got ' + before.bw + 'px');
+    check(label + ': 3px on hover', after.bw === 3, 'got ' + after.bw + 'px');
+    check(label + ': padding drops 2px to compensate', after.pad === before.pad - 2,
+      before.pad + ' -> ' + after.pad);
+    check(label + ': content does not shift', Math.abs(after.content - before.content) <= 1,
+      before.content + ' -> ' + after.content);
+  };
+
+  await borderProbe(0, '#tab-overview .stat', 'Overview stat tile');
+  await borderProbe(0, '#tab-overview .card', 'Overview card');
+  await borderProbe(1, '#weekly-list .gcard', 'Weekly card');
+  await borderProbe(2, '#monthly-list .gcard.compact', 'FY month card');
+  await borderProbe(3, '#client-list .gcard.snug', 'Client card');
+  await borderProbe(4, '#accounts-grid .acard', 'Account card');
+  await borderProbe(4, '#tab-accounts .oblig', 'Obligation row');
+
   check('no page errors', errs.length === 0, errs.join(' | '));
 
   await browser.close();
