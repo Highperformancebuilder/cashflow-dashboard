@@ -158,6 +158,114 @@ tr:hover td{background:rgba(49,81,80,.08)}
 .wfilter.danger { border-color: rgba(239, 68, 68, .4); color: #ef4444; }
 .wfilter.danger:hover { border-color: #ef4444; color: #ef4444; background: rgba(239, 68, 68, .1); }
 
+/* ---------------------------------------------------------------------------
+   Generated grids — Weekly week cards, FY Performance month cards, Clients.
+   These are built as HTML strings, so their state has to travel as classes:
+   an inline background or border-color would beat every :hover rule.
+
+   One shared set of state modifiers keeps the three grids on the same theme:
+     .is-cur    the current week          lime
+     .is-tight  closing under $5,000      amber
+     .is-neg    closing below zero        red
+     .is-pipe   inside a pipeline-gap month
+   --------------------------------------------------------------------------- */
+.gcard {
+  background: #191919;
+  border: 1px solid rgba(49, 81, 80, .4);
+  border-radius: 8px;
+  padding: 14px;
+  transition: transform .15s ease, border-color .15s ease,
+              background-color .15s ease, box-shadow .15s ease;
+}
+.gcard.is-cur   { background: rgba(204, 244, 146, .04); border-color: rgba(204, 244, 146, .4); }
+.gcard.is-tight { border-color: rgba(245, 158, 11, .4); }
+.gcard.is-neg   { background: rgba(239, 68, 68, .03); border-color: rgba(239, 68, 68, .5); }
+.gcard.is-pipe  { border-color: rgba(239, 68, 68, .6); }
+
+.gcard.clickable { cursor: pointer; }
+.gcard.clickable:hover {
+  transform: translateY(-2px);
+  border-color: rgba(204, 244, 146, .55);
+  background: #1d1d1d;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .5);
+}
+.gcard.clickable.is-neg:hover   { border-color: rgba(239, 68, 68, .85); background: rgba(239, 68, 68, .06); }
+.gcard.clickable.is-tight:hover { border-color: rgba(245, 158, 11, .8);  background: rgba(245, 158, 11, .05); }
+.gcard.clickable.is-cur:hover   { border-color: #ccf492; background: rgba(204, 244, 146, .09); }
+.gcard.clickable:focus-visible  { outline: 2px solid #ccf492; outline-offset: 2px; }
+
+/* An expanded week card joins onto its detail panel below it. */
+.gcard.is-open { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.gcard.is-open:hover { transform: none; }
+.gexp {
+  background: #000;
+  border: 1px solid rgba(49, 81, 80, .4);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  padding: 10px;
+}
+.gexp.is-cur { border-color: rgba(204, 244, 146, .4); }
+.gexp.is-tight { border-color: rgba(245, 158, 11, .4); }
+.gexp.is-neg { border-color: rgba(239, 68, 68, .5); }
+.gexp.is-pipe { border-color: rgba(239, 68, 68, .6); }
+
+@media (prefers-reduced-motion: reduce) {
+  .gcard { transition: none; }
+  .gcard.clickable:hover { transform: none; }
+}
+
+/* ---------------------------------------------------------------------------
+   4 Accounts tab.
+
+   Each account card carries its own identity colour — lime for Working, blue
+   for Regulation, amber for Savings, purple for Profit. That colour arrives as
+   a CSS custom property rather than an inline border-color, so :hover can
+   brighten the border to the account's own accent instead of being blocked by
+   the inline style (or overriding it with one colour for all four).
+   --------------------------------------------------------------------------- */
+.acard {
+  background: #191919;
+  border: 1px solid var(--accent-dim, rgba(49, 81, 80, .5));
+  border-radius: 8px;
+  padding: 14px 16px;
+  transition: transform .15s ease, border-color .15s ease,
+              background-color .15s ease, box-shadow .15s ease;
+}
+.acard:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent, #ccf492);
+  background: #1d1d1d;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .5);
+}
+
+/* The "Total Across All Accounts" tile. .clime sets its border !important, so
+   the hover has to match that specificity. */
+.card.clime:hover { border-color: rgba(204, 244, 146, .65) !important; }
+
+/* Finance obligations: loan rows under the account cards. */
+.oblig {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: #191919;
+  border: 1px solid rgba(49, 81, 80, .3);
+  border-radius: 6px;
+  font-size: 11px;
+  transition: transform .15s ease, border-color .15s ease, background-color .15s ease;
+}
+.oblig:hover {
+  border-color: rgba(245, 158, 11, .55);
+  background: #1d1d1d;
+  transform: translateX(3px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .acard, .oblig { transition: none; }
+  .acard:hover { transform: none; }
+  .oblig:hover { transform: none; }
+}
+
 /* Financial-year accordion headers on the FY Performance tab. */
 .fyhead { transition: opacity .15s ease; }
 .fyhead:hover { opacity: .8; }
@@ -302,10 +410,10 @@ tr:hover td{background:rgba(49,81,80,.08)}
 
   <span class="lbl">Finance Obligations</span>
   <div style="display:flex;flex-direction:column;gap:6px;">
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#191919;border:1px solid rgba(49,81,80,.3);border-radius:6px;font-size:11px;"><span>VW Amarok — Loan</span><span style="color:#f59e0b;font-weight:700;">Ends Feb 2028</span></div>
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#191919;border:1px solid rgba(49,81,80,.3);border-radius:6px;font-size:11px;"><span>Hyster Forklift — P&amp;E Loan</span><span style="color:#f59e0b;font-weight:700;">Ends Aug 2027</span></div>
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#191919;border:1px solid rgba(49,81,80,.3);border-radius:6px;font-size:11px;"><span>Isuzu Truck — Loan</span><span style="color:#f59e0b;font-weight:700;">Ends Dec 2029</span></div>
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#191919;border:1px solid rgba(49,81,80,.3);border-radius:6px;font-size:11px;"><span>Solar Repayments</span><span style="color:#f59e0b;font-weight:700;">Ends Feb 2027</span></div>
+    <div class="oblig"><span>VW Amarok — Loan</span><span style="color:#f59e0b;font-weight:700;">Ends Feb 2028</span></div>
+    <div class="oblig"><span>Hyster Forklift — P&amp;E Loan</span><span style="color:#f59e0b;font-weight:700;">Ends Aug 2027</span></div>
+    <div class="oblig"><span>Isuzu Truck — Loan</span><span style="color:#f59e0b;font-weight:700;">Ends Dec 2029</span></div>
+    <div class="oblig"><span>Solar Repayments</span><span style="color:#f59e0b;font-weight:700;">Ends Feb 2027</span></div>
   </div>
 </div>
 <!-- CONNECT -->
@@ -577,8 +685,6 @@ function renderWeekly(){
       var isn=w.closing<0;
       var ist=w.closing<5000&&!isn;
       var net=w.total_in-w.total_out;
-      var bc=isn?'rgba(239,68,68,.5)':ist?'rgba(245,158,11,.4)':isc?'rgba(204,244,146,.4)':'rgba(49,81,80,.4)';
-      var bg=isc?'rgba(204,244,146,.04)':'#191919';
       var cc=isn?'#ef4444':ist?'#f59e0b':'#ccf492';
       var nc=net>=0?'#ccf492':'#ef4444';
       var exp=expW===w.idx;
@@ -589,10 +695,14 @@ function renderWeekly(){
       var wMonths=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
       var wMonthKey=wMonths[wDt.getMonth()]+' '+wDt.getFullYear();
       var isPL=plLabels[wMonthKey]||false;
-      if(isPL) bc='rgba(239,68,68,.6)';
+
+      // State travels as classes so the hover rules in the stylesheet can win.
+      var state=(isn?' is-neg':ist?' is-tight':isc?' is-cur':'')+(isPL?' is-pipe pipeline-pulse':'');
 
       html+='<td style="vertical-align:top;padding:0;">';
-      html+='<div'+(isPL?' class="pipeline-pulse"':'')+' onclick="toggleW('+w.idx+')" style="background:'+bg+';border:1px solid '+bc+';border-radius:'+(exp?'8px 8px 0 0':'8px')+';padding:14px;cursor:pointer;">';
+      html+='<div class="gcard clickable'+state+(exp?' is-open':'')+'" role="button" tabindex="0"'+
+            ' aria-expanded="'+exp+'" onclick="toggleW('+w.idx+')"'+
+            ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();toggleW('+w.idx+');}">';
       html+='<div style="font-size:11px;font-weight:700;color:'+(isc?'#ccf492':'#d0dbd6')+';margin-bottom:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+dateLabel+'</div>';
       html+='<div style="font-size:9px;color:#d0dbd6;opacity:.5;text-transform:uppercase;letter-spacing:1px;margin-bottom:2px;">Closing</div>';
       html+='<div style="font-size:18px;font-weight:800;color:'+cc+';margin-bottom:8px;">'+fmt(w.closing)+'</div>';
@@ -604,7 +714,7 @@ function renderWeekly(){
       html+='</div></div>';
 
       if(exp){
-        html+='<div style="background:#000;border:1px solid '+bc+';border-top:none;border-radius:0 0 8px 8px;padding:10px;">';
+        html+='<div class="gexp'+state.replace(' pipeline-pulse','')+'">';
         html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">';
         html+='<div><div style="font-size:8px;color:#ccf492;font-weight:700;margin-bottom:4px;letter-spacing:1px;text-transform:uppercase;">Cash In</div>';
         html+='<div class="ei"><span>Sales</span><span style="color:#ccf492;">'+fmt(w.sales)+'</span></div>';
@@ -739,12 +849,11 @@ function renderMonthly(){
         var isTight=m.net<0&&m.net>-20000;
         var isNeg=m.net<=-20000;
         var nc=isPos?'#ccf492':isTight?'#f59e0b':'#ef4444';
-        var bc=isNeg?'rgba(239,68,68,.4)':isTight?'rgba(245,158,11,.3)':'rgba(49,81,80,.4)';
-        var bg=isNeg?'rgba(239,68,68,.03)':'#191919';
         r+='<td style="vertical-align:top;padding:0;">';
         var isPipeline = triggeredLabels && triggeredLabels[m.label];
-        var pulseClass = isPipeline ? ' pipeline-pulse' : '';
-        r+='<div class="'+pulseClass+'" style="background:'+bg+';border:1px solid '+bc+';border-radius:8px;padding:10px;">';
+        // Same state vocabulary as the Weekly grid, so both read alike.
+        var mState=(isNeg?' is-neg':isTight?' is-tight':'')+(isPipeline?' is-pipe pipeline-pulse':'');
+        r+='<div class="gcard'+mState+'" style="padding:10px;">';
         r+='<div style="font-size:11px;font-weight:700;color:#fff;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+m.label+'</div>';
         r+='<div style="padding-top:6px;border-top:1px solid rgba(49,81,80,.3);margin-bottom:6px;">';
         r+='<div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px;"><span style="color:#d0dbd6;opacity:.6;">Cash In</span><span style="color:#3b82f6;font-weight:600;">'+fmt(m.in)+'</span></div>';
@@ -887,7 +996,8 @@ function renderClients(){
   
   sorted.forEach(function(c){
     var pct = Math.round(c.total / maxTotal * 100);
-    html += '<div style="background:#191919;border:1px solid rgba(49,81,80,.4);border-radius:8px;padding:12px;position:relative;">';
+    html += '<div class="gcard' + (c.contracted_ahead > 0 ? ' is-cur' : '') +
+            '" style="padding:12px;position:relative;">';
     html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">';
     html += '<div style="font-size:11px;font-weight:700;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;margin-right:6px;" title="'+c.name+'">'+c.name+'</div>';
     if(c.lifetime > 0){
@@ -1116,7 +1226,8 @@ function renderAccounts() {
       ? { opening: cw.opening || 0, closing: cw.closing || 0, asOf: cwIso, exact: !!cw.iso }
       : accountWeek(a, cwIso);
 
-    html += '<div class="card" style="margin:0;border-color:' + meta.border + ';">';
+    // The account's colour travels as a custom property so :hover can use it.
+    html += '<div class="acard" style="--accent:' + meta.color + ';--accent-dim:' + meta.border + ';">';
     html += '<div style="font-size:11px;font-weight:700;color:' + meta.color + ';text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">' + (a.label || meta.label) + '</div>';
     html += '<div style="font-size:10px;color:#d0dbd6;opacity:.6;margin-bottom:10px;">' + meta.sub + '</div>';
 

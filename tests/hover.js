@@ -81,6 +81,103 @@ const STUB = require('fs').readFileSync(__dirname + '/stub.js', 'utf8');
   const rowsAfter = await page.evaluate(() => document.getElementById('weekly-list').innerHTML.length);
   check('filter buttons still filter', rowsAfter !== rowsBefore, rowsBefore + ' -> ' + rowsAfter);
 
+  // ---- Weekly grid: the cards are generated HTML, so their state has to
+  //      travel as classes or inline styles would beat every :hover rule. ----
+  const weeklyCards = await page.evaluate(() =>
+    document.querySelectorAll('#weekly-list .gcard').length);
+  check('weekly cards use the shared .gcard theme', weeklyCards > 0, 'found ' + weeklyCards);
+
+  const inlineStyled = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('#weekly-list .gcard'))
+         .filter(el => /background|border-color|border:/.test(el.getAttribute('style') || '')).length);
+  check('no inline background/border left to beat :hover', inlineStyled === 0,
+    inlineStyled + ' card(s) still inline-styled');
+
+  const wcard = await probe('#weekly-list .gcard', 'Weekly week card');
+  check('  ...it lifts', wcard.after.t !== 'none' && wcard.after.t !== wcard.before.t, wcard.after.t);
+  check('  ...border picks up the accent', wcard.after.b !== wcard.before.b,
+    wcard.before.b + ' -> ' + wcard.after.b);
+  check('weekly cards show a pointer (they expand on click)',
+    (await page.evaluate(() => getComputedStyle(document.querySelector('#weekly-list .gcard')).cursor)) === 'pointer');
+
+  // State classes must survive, and still drive distinct colours.
+  const states = await page.evaluate(() => {
+    const seen = {};
+    document.querySelectorAll('#weekly-list .gcard').forEach(el => {
+      ['is-cur', 'is-tight', 'is-neg', 'is-pipe'].forEach(s => {
+        if (el.classList.contains(s)) seen[s] = getComputedStyle(el).borderColor;
+      });
+    });
+    return seen;
+  });
+  check('state modifiers are applied to weekly cards', Object.keys(states).length > 0,
+    JSON.stringify(states));
+
+  // Clicking still expands, and the panel joins onto the card.
+  await page.evaluate(() => document.querySelector('#weekly-list .gcard').click());
+  await page.waitForTimeout(300);
+  const expanded = await page.evaluate(() => ({
+    open: document.querySelectorAll('#weekly-list .gcard.is-open').length,
+    panel: document.querySelectorAll('#weekly-list .gexp').length
+  }));
+  check('clicking a week card still expands it', expanded.open === 1 && expanded.panel === 1,
+    JSON.stringify(expanded));
+
+  // ---- the other generated grids share the theme -------------------------
+  await page.evaluate(() => document.querySelectorAll('.nb')[2].click());
+  await page.waitForTimeout(400);
+  check('FY Performance month cards use .gcard',
+    (await page.evaluate(() => document.querySelectorAll('#monthly-list .gcard').length)) > 0);
+
+  await page.evaluate(() => document.querySelectorAll('.nb')[3].click());
+  await page.waitForTimeout(400);
+  check('Clients cards use .gcard',
+    (await page.evaluate(() => document.querySelectorAll('#client-list .gcard').length)) > 0);
+
+  // ---- 4 Accounts tab ----------------------------------------------------
+  await page.evaluate(() => document.querySelectorAll('.nb')[4].click());
+  await page.waitForTimeout(450);
+
+  check('all four account cards use .acard',
+    (await page.evaluate(() => document.querySelectorAll('#accounts-grid .acard').length)) === 4);
+  check('no inline border-color left on the account cards',
+    (await page.evaluate(() => Array.from(document.querySelectorAll('#accounts-grid .acard'))
+       .filter(el => /border-color\s*:/.test(el.getAttribute('style') || '')).length)) === 0);
+
+  const acc = await probe('#accounts-grid .acard', 'Account card');
+  check('  ...it lifts', acc.after.t !== 'none' && acc.after.t !== acc.before.t, acc.after.t);
+  check('  ...border brightens', acc.after.b !== acc.before.b, acc.before.b + ' -> ' + acc.after.b);
+
+  // Each account must hover to ITS OWN colour, not a single shared accent.
+  const perAccount = await page.evaluate(async () => {
+    const out = [];
+    const cards = document.querySelectorAll('#accounts-grid .acard');
+    for (const el of cards) {
+      out.push({
+        accent: getComputedStyle(el).getPropertyValue('--accent').trim(),
+        dim: getComputedStyle(el).getPropertyValue('--accent-dim').trim()
+      });
+    }
+    return out;
+  });
+  check('each account carries its own accent colour',
+    perAccount.length === 4 && new Set(perAccount.map(a => a.accent)).size === 4,
+    JSON.stringify(perAccount.map(a => a.accent)));
+
+  check('the totals tile responds to hover too', await (async () => {
+    const el = page.locator('#accounts-total .card').first();
+    const before = await el.evaluate(e => getComputedStyle(e).borderColor);
+    await el.hover();
+    await page.waitForTimeout(280);
+    const after = await el.evaluate(e => getComputedStyle(e).borderColor);
+    await page.mouse.move(5, 880);
+    return before !== after;
+  })());
+
+  check('finance obligation rows use .oblig',
+    (await page.evaluate(() => document.querySelectorAll('#tab-accounts .oblig').length)) === 4);
+  await probe('#tab-accounts .oblig', 'Finance obligation row');
+
   check('no page errors', errs.length === 0, errs.join(' | '));
 
   await browser.close();
