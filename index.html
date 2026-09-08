@@ -342,6 +342,21 @@ tr:hover td{background:rgba(49,81,80,.08)}
 .fysec:hover .fyhead { opacity: 1; }
 .fychev { display: inline-block; transition: transform .15s ease; transform-origin: 50% 50%; }
 
+/* The chevron blinks while its row is hovered, so it is obvious which control
+   opens the section. Only opacity and glow animate — the rotate that marks an
+   open section is a transform, so the two never fight. */
+@keyframes chev-blink {
+  0%, 100% { opacity: 1;  text-shadow: 0 0 7px currentColor; }
+  50%      { opacity: .25; text-shadow: none; }
+}
+.fyhead:hover .fychev,
+.fyhead:focus-visible .fychev { animation: chev-blink .85s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .fyhead:hover .fychev,
+  .fyhead:focus-visible .fychev { animation: none; opacity: 1; }
+}
+
 /* Keyboard users get the same affordance as mouse users. */
 .fyhead:focus-visible,
 .nb:focus-visible, .wknav:focus-visible, .wr:focus-visible {

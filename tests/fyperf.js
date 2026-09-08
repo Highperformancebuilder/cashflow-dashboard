@@ -310,6 +310,52 @@ const STUB = require('fs').readFileSync(__dirname + '/stub.js', 'utf8');
     curBorder !== doneBorder, curBorder + ' vs ' + doneBorder);
   check('the current year hovers lime', /204, 244, 146/.test(curBorder), curBorder);
 
+  // ---- 16. the chevron blinks while its row is hovered --------------------
+  await page.evaluate(() => { fyPicked = false; renderMonthly(); });
+  await page.waitForTimeout(350);
+
+  const chev = page.locator('#monthly-list .fyhead .fychev').first();
+  const head = page.locator('#monthly-list .fyhead').first();
+
+  await page.mouse.move(5, 880);
+  await page.waitForTimeout(250);
+  const restAnim = await chev.evaluate(e => getComputedStyle(e).animationName);
+  check('chevron is still at rest when nothing is hovered', restAnim === 'none', restAnim);
+
+  await head.hover();
+  await page.waitForTimeout(300);
+  const hoverAnim = await chev.evaluate(e => ({
+    name: getComputedStyle(e).animationName,
+    dur: getComputedStyle(e).animationDuration,
+    count: getComputedStyle(e).animationIterationCount
+  }));
+  check('chevron blinks on hover', hoverAnim.name === 'chev-blink', JSON.stringify(hoverAnim));
+  check('  ...and keeps blinking', hoverAnim.count === 'infinite', hoverAnim.count);
+
+  // The opacity must actually be moving, not just an animation being declared.
+  const samples = [];
+  for (let i = 0; i < 6; i++) {
+    samples.push(await chev.evaluate(e => parseFloat(getComputedStyle(e).opacity)));
+    await page.waitForTimeout(120);
+  }
+  check('  ...opacity actually changes over time',
+    Math.max.apply(null, samples) - Math.min.apply(null, samples) > 0.1,
+    JSON.stringify(samples));
+
+  // Rotation marks an open section and must survive the blink.
+  const openChevron = await page.evaluate(() => {
+    const h = Array.from(document.querySelectorAll('#monthly-list .fyhead'))
+                   .find(x => x.getAttribute('aria-expanded') === 'true');
+    return h ? getComputedStyle(h.querySelector('.fychev')).transform : null;
+  });
+  check('the open section keeps its rotated chevron',
+    openChevron && openChevron !== 'none', String(openChevron));
+
+  await page.mouse.move(5, 880);
+  await page.waitForTimeout(300);
+  check('blink stops when the cursor leaves',
+    (await chev.evaluate(e => getComputedStyle(e).animationName)) === 'none');
+
   check('no page errors', errs.length === 0, errs.join(' | '));
 
   await browser.close();
