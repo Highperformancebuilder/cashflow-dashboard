@@ -7,8 +7,20 @@
 .env
 .env.*
 *.env
+!.env.example
 secrets.json
 service-account*.json
+*credentials*.json
+*service_role*
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+.supabase/
+.clasp.json
+.clasprc.json
 
 # ---------------------------------------------------------------------------
 # Dependencies. Playwright is ~19MB and is only used by the tests — the site is
@@ -39,13 +51,18 @@ venv/
 # ---------------------------------------------------------------------------
 tests/_*.js
 tests/*.png
+tests/*.csv
+tests/*.out
 tests/screenshots/
 test-results/
 playwright-report/
 blob-report/
 .playwright/
+ms-playwright/
 *.log
 npm-debug.log*
+coverage/
+.nyc_output/
 
 # ---------------------------------------------------------------------------
 # Build / host
@@ -61,10 +78,32 @@ build/
 .vscode/
 .idea/
 *.swp
+*.swo
 *~
+*.bak
+*.orig
+*.rej
 .DS_Store
+._*
+.Spotlight-V100
+.Trashes
 Thumbs.db
+ehthumbs.db
 desktop.ini
+$RECYCLE.BIN/
+
+# ---------------------------------------------------------------------------
+# Scratch and downloaded sheet data. Anything pulled from the live spreadsheet
+# is the client's financial data — useful while debugging, never committed.
+# ---------------------------------------------------------------------------
+scratch/
+tmp/
+*.tmp
+working_gviz.csv
+gid_export.csv
+*.m4a
+*.mp3
+*.wav
 
 # ---------------------------------------------------------------------------
 # Client working material. The written record is worth keeping; the raw audio

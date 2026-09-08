@@ -464,7 +464,8 @@ tr:hover td{background:rgba(49,81,80,.08)}
 
 <!-- CLIENTS -->
 <div id="tab-clients" class="tab">
-  <span class="lbl">Client Receipts — FY2026 (1 Jul 2025 – 30 Jun 2026)</span>
+  <span class="lbl">Client Receipts</span>
+  <!-- One section per financial year, newest first, same as FY Performance. -->
   <div id="client-list"></div>
 </div>
 
@@ -554,6 +555,20 @@ function toggleFY(yr){
   fyPicked=true;
   expandedFY = (expandedFY===yr) ? null : yr;
   renderMonthly();
+}
+
+// The Clients tab has its own financial-year accordion, tracked separately so
+// opening a year there does not move the one on FY Performance.
+let expandedClientFY=null, clFyPicked=false;
+
+// Client receipts read from the sheet: { byFY, lifetime, fyTotals }. Null until
+// a sheet is connected, at which point renderClients() stops using CLIENTS.
+let CLIENTS_LIVE=null;
+
+function toggleClientFY(yr){
+  clFyPicked=true;
+  expandedClientFY = (expandedClientFY===yr) ? null : yr;
+  renderClients();
 }
 
 // A financial year runs Jul–Jun, so its months are plotted in that order
@@ -1057,46 +1072,130 @@ function renderMonthly(){
 
 
 function renderClients(){
-  // Sort — active clients (contracted ahead > 0) first by amount desc, then inactive alphabetically
-  var active = CLIENTS.filter(function(c){ return c.contracted_ahead > 0; }).sort(function(a,b){ return b.contracted_ahead - a.contracted_ahead; });
-  var inactive = CLIENTS.filter(function(c){ return c.contracted_ahead === 0; }).sort(function(a,b){ return a.name.localeCompare(b.name); });
-  var sorted = active.concat(inactive);
-  var maxTotal = sorted[0].total;
+  var el = document.getElementById('client-list');
+  if (!el) return;
+
+  var live = (typeof CLIENTS_LIVE !== 'undefined') ? CLIENTS_LIVE : null;
+
+  // Nothing connected yet: show the built-in sample list under a single
+  // heading rather than inventing financial years the sheet has not supplied.
+  if (!live || !live.byFY) {
+    el.innerHTML = '<div class="fysec is-current">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:6px;margin-bottom:10px;border-bottom:1px solid var(--accent-dim);">' +
+      '<span style="font-size:10px;font-weight:700;color:var(--accent);letter-spacing:2px;text-transform:uppercase;">Sample data &mdash; connect a sheet to see every financial year</span></div>' +
+      clientGrid(CLIENTS.map(function (c) {
+        return { name: c.name, total: c.total, invoices: c.invoices,
+                 lastPayment: null, lastPaymentText: c.last_payment, ahead: c.contracted_ahead };
+      }), CLIENTS.reduce(function (m, c) { m[c.name] = c.lifetime; return m; }, {})) +
+      '</div>';
+    return;
+  }
+
+  var years = Object.keys(live.byFY).map(Number).sort(function (a, b) { return b - a; });
+
+  var cwIso = (WEEKLY[viewIdx] && WEEKLY[viewIdx].iso) ||
+              (WEEKLY[CW_IDX] && WEEKLY[CW_IDX].iso) || '';
+  var currentFY = cwIso
+    ? parseInt(cwIso.slice(0, 4), 10) + (parseInt(cwIso.slice(5, 7), 10) >= 7 ? 1 : 0)
+    : years[0];
+
+  // Same default-and-remember rule as the FY Performance accordion.
+  var defaultFY = function () {
+    return years.indexOf(currentFY) >= 0 ? currentFY : (years.length ? years[0] : null);
+  };
+  if (!clFyPicked) {
+    expandedClientFY = defaultFY();
+  } else if (expandedClientFY !== null && years.indexOf(expandedClientFY) < 0) {
+    clFyPicked = false;
+    expandedClientFY = defaultFY();
+  }
+
   var html = '';
-  html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">';
-  
-  sorted.forEach(function(c){
-    var pct = Math.round(c.total / maxTotal * 100);
-    html += '<div class="gcard snug' + (c.contracted_ahead > 0 ? ' is-cur' : '') +
-            '" style="position:relative;">';
+  years.forEach(function (fy) {
+    var list = live.byFY[fy] || [];
+    var open = expandedClientFY === fy;
+    var isCurrent = fy === currentFY;
+    var isFuture = fy > currentFY;
+    var status = isCurrent ? 'Current Financial Year' : isFuture ? 'Forward Bookings' : 'Completed';
+    var total = live.fyTotals[fy] || 0;
+    var withRevenue = list.filter(function (c) { return c.total !== 0; }).length;
+
+    html += '<div class="fysec' + (isCurrent ? ' is-current' : isFuture ? ' is-future' : '') + '">';
+    html += '<div class="fyhead" role="button" tabindex="0" aria-expanded="' + open + '"' +
+            ' onclick="toggleClientFY(' + fy + ')"' +
+            ' onkeydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();toggleClientFY(' + fy + ');}"' +
+            ' style="display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;padding-bottom:6px;' +
+            (open ? 'margin-bottom:10px;border-bottom:1px solid var(--accent-dim);' : '') + '">';
+    html += '<div style="display:flex;align-items:center;gap:8px;min-width:0;">';
+    html += '<span class="fychev" style="color:var(--accent);font-size:9px;' + (open ? 'transform:rotate(90deg);' : '') + '">&#9654;</span>';
+    html += '<span style="font-size:10px;font-weight:700;color:var(--accent);letter-spacing:2px;text-transform:uppercase;' +
+            'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">FY' + fy +
+            ' (1 Jul ' + (fy - 1) + ' &ndash; 30 Jun ' + fy + ') &mdash; ' + status + '</span></div>';
+    html += '<div style="text-align:right;white-space:nowrap;">';
+    html += '<div style="font-size:8px;color:#d0dbd6;opacity:.5;letter-spacing:1px;text-transform:uppercase;">' +
+            withRevenue + ' client' + (withRevenue === 1 ? '' : 's') + '</div>';
+    html += '<div style="font-size:13px;font-weight:800;color:#ccf492;">' + fmt(total) + '</div>';
+    html += '</div></div>';
+
+    if (open) html += clientGrid(list, live.lifetime);
+    html += '</div>';
+  });
+
+  el.innerHTML = html;
+}
+
+/** The card grid for one financial year's clients. */
+function clientGrid(list, lifetime) {
+  var rows = list.filter(function (c) { return c.total !== 0; });
+  if (!rows.length) {
+    return '<div style="font-size:10px;color:#d0dbd6;opacity:.55;padding:6px 0;">' +
+           'No client receipts recorded in this financial year.</div>';
+  }
+
+  // Clients with money still booked ahead first, then by revenue.
+  var ahead = rows.filter(function (c) { return c.ahead > 0; })
+                  .sort(function (a, b) { return b.ahead - a.ahead; });
+  var rest = rows.filter(function (c) { return !(c.ahead > 0); })
+                 .sort(function (a, b) { return b.total - a.total; });
+  var sorted = ahead.concat(rest);
+  var maxTotal = Math.max.apply(null, sorted.map(function (c) { return Math.abs(c.total); })) || 1;
+
+  var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;">';
+  sorted.forEach(function (c) {
+    var pct = Math.round(Math.abs(c.total) / maxTotal * 100);
+    var lt = lifetime ? lifetime[c.name] : 0;
+    var last = c.lastPaymentText || (c.lastPayment ? stamp2(c.lastPayment) : '');
+
+    html += '<div class="gcard snug' + (c.ahead > 0 ? ' is-cur' : '') + '" style="position:relative;">';
     html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">';
-    html += '<div style="font-size:11px;font-weight:700;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;margin-right:6px;" title="'+c.name+'">'+c.name+'</div>';
-    if(c.lifetime > 0){
+    html += '<div style="font-size:11px;font-weight:700;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;margin-right:6px;" title="' +
+            c.name + '">' + c.name + '</div>';
+    if (lt) {
       html += '<div style="flex-shrink:0;background:rgba(49,81,80,.4);border-radius:4px;padding:2px 6px;text-align:center;">';
       html += '<div style="font-size:7px;color:#d0dbd6;opacity:.5;text-transform:uppercase;letter-spacing:1px;margin-bottom:1px;">Lifetime</div>';
-      html += '<div style="font-size:9px;font-weight:800;color:#d0dbd6;">$'+c.lifetime.toLocaleString()+'</div>';
-      html += '</div>';
+      html += '<div style="font-size:9px;font-weight:800;color:#d0dbd6;">' + fmt(lt) + '</div></div>';
     }
     html += '</div>';
-    html += '<div style="font-size:8px;color:#d0dbd6;opacity:.5;text-transform:uppercase;letter-spacing:1px;margin-bottom:2px;">Revenue FY2026</div>';
-    html += '<div style="font-size:16px;font-weight:800;color:#ccf492;margin-bottom:8px;">$'+c.total.toLocaleString()+'</div>';
-    html += '<div style="background:#233a39;border-radius:99px;height:4px;overflow:hidden;margin-bottom:10px;"><div style="width:'+pct+'%;height:100%;background:linear-gradient(90deg,#315150,#ccf492);border-radius:99px;"></div></div>';
-
+    html += '<div style="font-size:8px;color:#d0dbd6;opacity:.5;text-transform:uppercase;letter-spacing:1px;margin-bottom:2px;">Receipts</div>';
+    html += '<div style="font-size:16px;font-weight:800;color:' + (c.total < 0 ? '#ef4444' : '#ccf492') +
+            ';margin-bottom:8px;">' + fmtK(c.total) + '</div>';
+    html += '<div style="background:#233a39;border-radius:99px;height:4px;overflow:hidden;margin-bottom:10px;">' +
+            '<div style="width:' + pct + '%;height:100%;background:linear-gradient(90deg,#315150,#ccf492);border-radius:99px;"></div></div>';
     html += '<div style="display:flex;justify-content:space-between;font-size:9px;margin-bottom:8px;">';
-    html += '<div><div style="color:#d0dbd6;opacity:.5;margin-bottom:2px;">Invoices</div><div style="color:#d0dbd6;font-weight:700;">'+c.invoices+'</div></div>';
-    html += '<div style="text-align:right;"><div style="color:#d0dbd6;opacity:.5;margin-bottom:2px;">Last Payment</div><div style="color:#d0dbd6;font-weight:700;">'+c.last_payment+'</div></div>';
+    html += '<div><div style="color:#d0dbd6;opacity:.5;margin-bottom:2px;">Payments</div>' +
+            '<div style="color:#d0dbd6;font-weight:700;">' + c.invoices + '</div></div>';
+    html += '<div style="text-align:right;"><div style="color:#d0dbd6;opacity:.5;margin-bottom:2px;">Last Payment</div>' +
+            '<div style="color:#d0dbd6;font-weight:700;">' + (last || '&mdash;') + '</div></div>';
     html += '</div>';
-    if(c.contracted_ahead > 0){
+    if (c.ahead > 0) {
       html += '<div style="background:rgba(49,81,80,.3);border-radius:6px;padding:7px 10px;display:flex;justify-content:space-between;align-items:center;">';
-      html += '<div style="font-size:8px;color:#d0dbd6;opacity:.6;text-transform:uppercase;letter-spacing:1px;">Contracted Ahead</div>';
-      html += '<div style="font-size:11px;font-weight:800;color:#ccf492;">$'+c.contracted_ahead.toLocaleString()+'</div>';
-      html += '</div>';
+      html += '<div style="font-size:8px;color:#d0dbd6;opacity:.6;text-transform:uppercase;letter-spacing:1px;">Booked Ahead</div>';
+      html += '<div style="font-size:11px;font-weight:800;color:#ccf492;">' + fmt(c.ahead) + '</div></div>';
     }
     html += '</div>';
   });
-  
   html += '</div>';
-  document.getElementById('client-list').innerHTML = html;
+  return html;
 }
 
 
@@ -1526,6 +1625,10 @@ function applySnapshot(snap, origin) {
       }
     });
   }
+  // Client receipts, read from the sheet. Falls back to the built-in sample
+  // list only while nothing is connected.
+  if (snap.clients && snap.clients.byFY) CLIENTS_LIVE = snap.clients;
+
   sync.tabStatus = snap.tabStatus || sync.tabStatus;
   // Only the Apps Script bridge can enumerate tabs — a CSV endpoint cannot.
   if (snap.otherTabs) sync.otherTabs = snap.otherTabs;
@@ -1817,6 +1920,95 @@ function csvDate(v) {
   return isNaN(d.getTime()) ? null : d;
 }
 
+/**
+ * Client receipts, read from the sheet.
+ *
+ * The Working Account tab lists every client on its own row between the
+ * "Sales:" header and the "Total Sales" line, with their receipts spread
+ * across the same week columns as everything else. Aggregating those rows by
+ * financial year reproduces the sheet's own "Total TO for FY__" figures
+ * exactly, which is what makes this safe to rely on.
+ *
+ * Returns per-financial-year lists plus an all-time lifetime figure per client.
+ */
+const NON_CLIENT_ROW = /^(total\b|overdraft|greg lend|credit from supplier|[\d,.\s$()-]+$)/i;
+
+function parseClients(rows, dateRow, salesRowIdx, currentIso) {
+  if (dateRow < 0 || salesRowIdx === undefined || salesRowIdx < 0) return null;
+
+  // The "Sales:" header sits above the client block.
+  let header = -1;
+  for (let r = 0; r < salesRowIdx; r++) {
+    if (/^sales:?$/i.test(normLabel(labelOf(rows[r])))) header = r;
+  }
+  if (header < 0 || salesRowIdx - header < 2) return null;
+
+  const dates = rows[dateRow] || [];
+  const cols = [];
+  for (let c = 0; c < dates.length; c++) {
+    const d = csvDate(dates[c]);
+    if (d && d.getUTCFullYear() >= 2015 && d.getUTCFullYear() <= 2100) {
+      cols.push({ c: c, iso: d.toISOString().slice(0, 10) });
+    }
+  }
+  if (!cols.length) return null;
+
+  const byFY = {}, lifetime = {}, fyTotals = {};
+
+  for (let r = header + 1; r < salesRowIdx; r++) {
+    const name = labelOf(rows[r]);
+    if (!name || NON_CLIENT_ROW.test(name.trim())) continue;
+
+    for (let i = 0; i < cols.length; i++) {
+      const v = csvNum(rows[r][cols[i].c]);
+      if (!v) continue;
+      const iso = cols[i].iso;
+      const fy = fyEndYear(iso);
+
+      if (!byFY[fy]) byFY[fy] = {};
+      if (!byFY[fy][name]) {
+        byFY[fy][name] = { name: name, total: 0, invoices: 0, lastPayment: null, ahead: 0 };
+      }
+      const e = byFY[fy][name];
+      e.total += v;
+      e.invoices += 1;                       // one receipt column = one payment
+      if (!e.lastPayment || iso > e.lastPayment) e.lastPayment = iso;
+      // Money booked for weeks still ahead of the one on screen.
+      if (currentIso && iso > currentIso) e.ahead += v;
+
+      lifetime[name] = (lifetime[name] || 0) + v;
+      fyTotals[fy] = (fyTotals[fy] || 0) + v;
+    }
+  }
+
+  const years = Object.keys(byFY);
+  if (!years.length) return null;
+
+  const out = {};
+  years.forEach(function (fy) {
+    out[fy] = Object.keys(byFY[fy]).map(function (n) {
+      const e = byFY[fy][n];
+      e.total = Math.round(e.total);
+      e.ahead = Math.round(e.ahead);
+      return e;
+    }).sort(function (a, b) { return b.total - a.total; });
+  });
+  Object.keys(lifetime).forEach(function (n) { lifetime[n] = Math.round(lifetime[n]); });
+  Object.keys(fyTotals).forEach(function (f) { fyTotals[f] = Math.round(fyTotals[f]); });
+
+  return { byFY: out, lifetime: lifetime, fyTotals: fyTotals };
+}
+
+/** First non-empty cell in the left-hand columns of a row. */
+function labelOf(row) {
+  if (!row) return '';
+  for (let c = 0; c < Math.min(row.length, LABEL_SCAN_COLS); c++) {
+    const v = row[c];
+    if (typeof v === 'string' && v.trim()) return v.trim();
+  }
+  return '';
+}
+
 function snapshotFromRows(rows) {
   const res = resolveRows(rows);
   if (res.dateRow < 0) {
@@ -1916,6 +2108,9 @@ function snapshotFromRows(rows) {
     currentWeekIdx: currentIdx,
     weekly: weekly,
     rowMap: resolved,
+    clients: parseClients(rows, res.dateRow,
+                          resolved.sales ? resolved.sales.index : -1,
+                          cw ? cw.iso : null),
     parseWarnings: warnings,
     // CSV export covers the Working Account only; leave the rest to fallbacks.
     accounts: cw ? { working: { label: 'Working Account', opening: cw.opening, closing: cw.closing } } : {}

@@ -402,6 +402,94 @@ function parseAccount_(grid, currentIso) {
   };
 }
 
+/**
+ * Client receipts, read from the sheet.
+ *
+ * Clients sit on their own rows between the "Sales:" header and "Total Sales",
+ * spread across the same week columns as everything else. Aggregating them by
+ * financial year reproduces the sheet's own "Total TO for FY__" figures.
+ *
+ * Rows in that block that are not clients — the FY total labels and their bare
+ * numbers, Overdraft / Money Lent, Greg Lend/Payback, Credit from supplier —
+ * are excluded, so the tab lists clients and nothing else.
+ */
+var NON_CLIENT_ROW = /^(total\b|overdraft|greg lend|credit from supplier|[\d,.\s$()-]+$)/i;
+
+function labelOf_(row) {
+  if (!row) return '';
+  for (var c = 0; c < Math.min(row.length, LABEL_SCAN_COLS); c++) {
+    var v = row[c];
+    if (typeof v === 'string' && v.trim()) return v.trim();
+  }
+  return '';
+}
+
+function parseClients_(grid, currentIso) {
+  var res = resolveRows_(grid);
+  var dateRow = res.dateRow;
+  var salesInfo = res.map.sales;
+  if (dateRow < 0 || !salesInfo || salesInfo.index < 0) return null;
+  var salesRowIdx = salesInfo.index;
+
+  var header = -1, r;
+  for (r = 0; r < salesRowIdx; r++) {
+    if (/^sales:?$/i.test(normLabel_(labelOf_(grid[r])))) header = r;
+  }
+  if (header < 0 || salesRowIdx - header < 2) return null;
+
+  var dates = grid[dateRow] || [];
+  var cols = [];
+  for (var c = 0; c < dates.length; c++) {
+    var d = date_(dates[c]);
+    if (d && d.getUTCFullYear() >= 2015 && d.getUTCFullYear() <= 2100) {
+      cols.push({ c: c, iso: isoDate_(d) });
+    }
+  }
+  if (!cols.length) return null;
+
+  var byFY = {}, lifetime = {}, fyTotals = {};
+  for (r = header + 1; r < salesRowIdx; r++) {
+    var name = labelOf_(grid[r]);
+    if (!name || NON_CLIENT_ROW.test(name.replace(/^\s+/, ''))) continue;
+
+    for (var i = 0; i < cols.length; i++) {
+      var v = num_(grid[r][cols[i].c]);
+      if (!v) continue;
+      var iso = cols[i].iso;
+      var y = parseInt(iso.slice(0, 4), 10);
+      var fy = parseInt(iso.slice(5, 7), 10) >= 7 ? y + 1 : y;
+
+      if (!byFY[fy]) byFY[fy] = {};
+      if (!byFY[fy][name]) byFY[fy][name] = { name: name, total: 0, invoices: 0, lastPayment: null, ahead: 0 };
+      var e = byFY[fy][name];
+      e.total += v;
+      e.invoices += 1;
+      if (!e.lastPayment || iso > e.lastPayment) e.lastPayment = iso;
+      if (currentIso && iso > currentIso) e.ahead += v;
+
+      lifetime[name] = (lifetime[name] || 0) + v;
+      fyTotals[fy] = (fyTotals[fy] || 0) + v;
+    }
+  }
+
+  var years = Object.keys(byFY);
+  if (!years.length) return null;
+
+  var out = {};
+  years.forEach(function (fy) {
+    out[fy] = Object.keys(byFY[fy]).map(function (n) {
+      var e = byFY[fy][n];
+      e.total = Math.round(e.total);
+      e.ahead = Math.round(e.ahead);
+      return e;
+    }).sort(function (a, b) { return b.total - a.total; });
+  });
+  Object.keys(lifetime).forEach(function (n) { lifetime[n] = Math.round(lifetime[n]); });
+  Object.keys(fyTotals).forEach(function (f) { fyTotals[f] = Math.round(fyTotals[f]); });
+
+  return { byFY: out, lifetime: lifetime, fyTotals: fyTotals };
+}
+
 /** Weekly contribution for a savings-style account, used for the 12m projection. */
 function weeklyContribution_(grid) {
   // Was reading row 217 absolutely, which broke the moment a row was inserted.
@@ -522,6 +610,7 @@ function buildSnapshot() {
     accounts: accounts,
     tabStatus: tabStatus,
     otherTabs: found.other,
+    clients: parseClients_(grids.working, currentIso),
     rowMap: diag.rowMap || null,
     parseWarnings: diag.warnings || []
   };

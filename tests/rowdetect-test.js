@@ -27,6 +27,8 @@ eval([
   pick(/const FIGURE_NAMES = \{[\s\S]*?\n\};/),
   pick(/const LABEL_SCAN_COLS = \d+;/),
   pick(/const TAB_ALIASES = \{[\s\S]*?\n\};/),
+  pick(/const NON_CLIENT_ROW = [^\n]*/),
+  grab('fyEndYear'), grab('labelOf'), grab('parseClients'),
   grab('rowLabelRank'), grab('rowDataCount'), grab('resolveRows'),
   grab('findWeekDateRow'), grab('weekHasData'), grab('pickCurrentWeek'),
   grab('snapshotFromRows'), grab('accountFromRows'),

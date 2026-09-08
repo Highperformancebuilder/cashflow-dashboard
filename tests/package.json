@@ -13,7 +13,8 @@
     "test:connect": "node connect.js",
     "test:tabs": "node tabs.js",
     "test:hover": "node hover.js",
-    "test:fyperf": "node fyperf.js"
+    "test:fyperf": "node fyperf.js",
+    "test:clients": "node clients.js"
   },
   "devDependencies": {
     "playwright": "^1.47.0"

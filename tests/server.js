@@ -22,6 +22,20 @@ function buildGrid(weeks) {
   label(98,  'Total Supplier Payments');
   label(215, 'Total Business Payments (Cash Outwards)');
   label(217, 'Closing Bank Balance');
+  // The client block: a "Sales:" header, three client rows, then rows that are
+  // NOT clients and must be filtered out of the Clients tab.
+  label(11, 'Sales:');
+  label(12, 'Acme Builders');
+  label(13, 'Bravo Constructions');
+  label(14, 'Delta Projects');
+  label(15, 'Credit from supplier');
+  label(16, 'Total TO for FY26 (Cash in Bank)');
+  put(12, weeks.map((w, i) => (i % 3 === 0 ? 12000 + i * 100 : '')));
+  put(13, weeks.map((w, i) => (i % 5 === 0 ? 8000 + i * 50 : '')));
+  put(14, weeks.map((w, i) => (i % 7 === 0 ? 5000 : '')));
+  put(15, weeks.map((w, i) => (i === 2 ? 297 : '')));
+  put(16, weeks.map(() => ''));
+
   put(6,   weeks.map(w => w.iso));
   put(8,   weeks.map(w => w.opening));
   put(65,  weeks.map(w => w.sales));
