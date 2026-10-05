@@ -100,6 +100,7 @@ than the published CSV, because published CSV is CDN-cached and would defeat
 | `index.html` | The whole dashboard: markup, styles, rendering, sync. |
 | `apps-script/Code.gs` | Paste into the spreadsheet's Apps Script project. The canonical parser. |
 | `netlify/functions/sheet.js` | CORS proxy for Google. Host-allowlisted. |
+| `supabase/functions/admin-users/index.ts` | Import Users backend (Supabase Edge Function): import / list / remove logins. Admins only. |
 | `netlify.toml` | Netlify build and function config. |
 | `supabase/schema.sql` | Tables, RLS policies, Realtime publication. |
 | `tests/` | Browser tests (see below). |
@@ -174,6 +175,64 @@ only when the sheet actually changes, and polls nothing.
 
 Connect the repo. `netlify.toml` already sets the publish directory and
 functions path, so no build configuration is needed in the UI.
+
+No environment variables are needed on Netlify. The Import Users tool runs in
+Supabase (next step), not here.
+
+### 3b. The Import Users function (Supabase Edge Function)
+
+Creating logins needs the project's secret key, which must never reach a
+browser. The tool therefore runs as a Supabase Edge Function — Supabase gives
+it the secret key automatically, so the key is never copied anywhere.
+
+1. **Supabase → Edge Functions → Deploy a new function → Via Editor.**
+2. Name it exactly **`admin-users`**.
+3. Replace the editor's code with the whole of
+   `supabase/functions/admin-users/index.ts`, and deploy.
+4. Open the function's **Details / Settings** and turn **"Enforce JWT
+   verification" OFF**. The function verifies the caller itself and checks
+   they are an admin; the gateway check would reject valid sign-ins.
+
+Optional function secrets (**Edge Functions → Secrets**): `SITE_URL` (where
+invite emails send people back to) and `DEFAULT_SHEET_ID` (otherwise people
+imported without a sheet link get the importing admin's own sheet).
+
+With the CLI instead: `supabase functions deploy admin-users` —
+`supabase/config.toml` already turns JWT verification off.
+
+### 4. Who can sign in
+
+Only people with a login **and** a row in `clients` see live data. Close the
+front door so nobody can create their own login:
+
+**Supabase → Authentication → Sign In / Providers → Email → turn off "Allow
+new users to sign up".**
+
+Then make Greg the super-admin: create his login under **Authentication →
+Users → Add user** (tick *Auto Confirm User*), and run the `5b` statement at
+the bottom of `supabase/schema.sql`. When he signs in he gets an **Import
+Users** tab; nobody else does.
+
+- **Upload Excel** — `.xlsx` (or CSV) with `First name, Last name, Company
+  name, Email, Password`, plus an optional `Sheet link`. The heading row can
+  sit anywhere in the first ten rows (Greg's sheet has a title on row 1), and
+  empty rows are skipped even when they show `0` under Password. A preview
+  flags bad emails, duplicates and short passwords before anything is sent;
+  passwords are masked on screen.
+- Each person is created in **Supabase Authentication** (email, password,
+  first/last name, confirmed so they can sign in at once) **and** in the
+  `clients` table (names, company, sheet, linked by `user_id`).
+- **Passwords** — by default each person gets the password in their row.
+  Supabase requires at least **6 characters**, so shorter ones are refused
+  with a clear message. Alternatives: generate a strong password per person
+  (shown once), or email an invite (needs custom SMTP under
+  **Authentication → Emails → SMTP**).
+- **Remove** — deletes the person's login and their access row.
+
+Importing someone who already has a login updates their details without
+touching their password or admin status. `is_admin` can only be set from the
+SQL editor; signed-in users can change nothing in `clients` except the two
+columns the Connect tab writes.
 
 ---
 

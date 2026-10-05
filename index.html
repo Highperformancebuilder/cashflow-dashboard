@@ -31,6 +31,17 @@
 .cbtn.ghost:hover{border-color:#ef4444;color:#ef4444;background:none;border-width:3px;padding:10px 20px;}
 .chelp{font-size:10px;color:#d0dbd6;opacity:.55;line-height:1.8;}
 .chelp code{background:#000;border:1px solid rgba(49,81,80,.4);border-radius:3px;padding:1px 5px;font-size:9px;color:#ccf492;}
+#imp-text{width:100%;background:#000;border:1px solid #315150;border-radius:6px;padding:10px 12px;color:#d0dbd6;font-family:ui-monospace,Consolas,monospace;font-size:11px;outline:none;box-sizing:border-box;resize:vertical;}
+#imp-text:focus{border-color:#ccf492;}
+.imp-mode{display:flex;gap:8px;align-items:flex-start;font-size:10px;color:#d0dbd6;opacity:.85;margin-bottom:6px;cursor:pointer;line-height:1.5;}
+.imp-mode input{margin-top:2px;accent-color:#ccf492;}
+.utab{width:100%;border-collapse:collapse;font-size:10px;}
+.utab th{text-align:left;font-size:8px;letter-spacing:1px;text-transform:uppercase;color:#d0dbd6;opacity:.55;padding:6px 8px;border-bottom:1px solid rgba(49,81,80,.4);}
+.utab td{padding:6px 8px;border-bottom:1px solid rgba(49,81,80,.2);color:#d0dbd6;word-break:break-all;}
+.utab .ok{color:#ccf492;font-weight:700;}
+.utab .bad{color:#ef4444;font-weight:700;}
+.utab .meh{color:#f59e0b;font-weight:700;}
+.utab code{background:#000;border:1px solid rgba(49,81,80,.4);border-radius:3px;padding:1px 5px;color:#ccf492;font-size:10px;}
 #sync-badge{font-size:8px;letter-spacing:1px;color:#315150;text-transform:uppercase;padding:4px 8px;}
 </style>
 <style>
@@ -412,7 +423,10 @@ tr:hover td{background:rgba(49,81,80,.08)}
   <button class="nb" onclick="showTab('monthly',this)">FY Performance</button>
   <button class="nb" onclick="showTab('clients',this)">Clients</button>
   <button class="nb" onclick="showTab('accounts',this)">4 Accounts</button>
-  <button class="nb" onclick="showTab('connect',this)">Connect</button>
+  <!-- Connect and Import Users are Greg's (admins) only; setAdmin() shows them. -->
+  <button class="nb" id="nb-connect" onclick="showTab('connect',this)" hidden>Connect</button>
+  <!-- Only shown to admins (clients.is_admin); the server checks again. -->
+  <button class="nb" id="nb-users" onclick="showTab('users',this)" hidden>Import Users</button>
 </div>
 <div class="content">
 <div id="sync-banner"></div>
@@ -503,6 +517,51 @@ tr:hover td{background:rgba(49,81,80,.08)}
     <div class="oblig"><span>Solar Repayments</span><span style="color:#f59e0b;font-weight:700;">Ends Feb 2027</span></div>
   </div>
 </div>
+<!-- USERS (admins only) -->
+<div id="tab-users" class="tab">
+  <span class="lbl">Import Users</span>
+  <div class="card" style="margin-bottom:14px;">
+    <div class="chelp" style="margin-bottom:12px;">
+      Upload the Excel file of people who should have access. It needs the columns
+      <code>First name</code> <code>Last name</code> <code>Company name</code> <code>Email</code> <code>Password</code>
+      &mdash; and optionally <code>Sheet link</code> to give someone their own cashflow sheet.
+      The heading row can be anywhere in the first ten rows; empty rows are skipped.
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
+      <label class="cbtn" style="display:inline-block;">
+        Upload Excel file<input type="file" id="imp-file" accept=".xlsx,.xls,.xlsm,.csv,text/csv" hidden onchange="readUserFile(this)">
+      </label>
+      <button class="cbtn ghost" type="button" onclick="downloadUserTemplate()">Download template</button>
+      <span id="imp-file-name" class="chelp"></span>
+    </div>
+    <details style="margin-bottom:6px;">
+      <summary class="chelp" style="cursor:pointer;">Or paste rows copied from Excel</summary>
+      <textarea id="imp-text" rows="6" style="margin-top:8px;" placeholder="First name&#9;Last name&#9;Company name&#9;Email&#9;Password"
+                oninput="document.getElementById('imp-file-name').textContent='';previewUsers()"></textarea>
+    </details>
+
+    <div class="chelp" style="margin:12px 0 6px;"><strong style="color:#d0dbd6;opacity:.9;">Passwords</strong></div>
+    <label class="imp-mode"><input type="radio" name="imp-mode" value="file" checked onchange="previewUsers(false)">
+      <span><strong>Use the passwords in the file</strong> &mdash; each person signs in with the password in their row (at least 6 characters).</span></label>
+    <label class="imp-mode"><input type="radio" name="imp-mode" value="password" onchange="previewUsers(false)">
+      <span><strong>Generate a strong password for each person</strong> &mdash; shown to you once, to send them.</span></label>
+    <label class="imp-mode"><input type="radio" name="imp-mode" value="invite" onchange="previewUsers(false)">
+      <span><strong>Email an invite</strong> &mdash; they choose their own password. Needs email (SMTP) set up in Supabase.</span></label>
+
+    <div id="imp-preview" style="margin-top:12px;"></div>
+    <div style="display:flex;gap:8px;margin-top:10px;">
+      <button class="cbtn" id="imp-go" type="button" onclick="importUsers()" disabled>Import</button>
+    </div>
+    <div id="imp-result" style="margin-top:12px;"></div>
+  </div>
+
+  <div style="display:flex;justify-content:space-between;align-items:center;">
+    <span class="lbl">People With Access</span>
+    <button class="cbtn ghost" type="button" style="padding:6px 12px;" onclick="loadUsers()">Refresh</button>
+  </div>
+  <div id="users-list"></div>
+</div>
+
 <!-- CONNECT -->
 <div id="tab-connect" class="tab">
   <span class="lbl">Connect a Google Sheet</span>
@@ -643,6 +702,7 @@ function showTab(n,b){
   // Redrawn on open so it reflects the week the navigator is currently on.
   if(n==='accounts'&&typeof renderAccounts==='function'){renderAccounts();}
   if(n==='connect'&&typeof renderConnect==='function'){renderConnect();}
+  if(n==='users'&&typeof loadUsers==='function'){loadUsers();}
 }
 
 
@@ -1234,8 +1294,12 @@ renderMonthly();
    installed, or the websocket drops. See README.md for the setup steps.
    ========================================================================== */
 
-const SUPABASE_URL = 'https://abhmonhsiluraykelrpp.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_D5P8QA2r-4FWmm3TfPpZgA_y1NSlV1W';
+// Previous Supabase project — kept for reference, no longer used.
+// const SUPABASE_URL = 'https://abhmonhsiluraykelrpp.supabase.co';
+// const SUPABASE_KEY = 'sb_publishable_D5P8QA2r-4FWmm3TfPpZgA_y1NSlV1W';
+
+const SUPABASE_URL = 'https://kgjsqsdpwehcebyhkhql.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_gZJ0N7T73joHRj2H8V-ArA_5bNgnB3D';
 
 const SHEET_PROXY      = '/.netlify/functions/sheet';
 const SNAPSHOT_TABLE   = 'sheet_snapshots';
@@ -1271,6 +1335,7 @@ const sync = {
   parseWarnings: null,   // figures that could not be matched to a row by name
   tabStatus: null,       // which account tabs were read successfully
   otherTabs: null,       // tabs present in the spreadsheet that we do not read
+  isAdmin: false,        // clients.is_admin — shows the Users tab
   lastSecondaryAt: 0,    // when the secondary account tabs were last read
   channel: null,
   pollTimer: null,
@@ -1669,8 +1734,10 @@ function applySnapshot(snap, origin) {
   if (sync.parseWarnings) {
     const n = sync.parseWarnings.length;
     setBanner('warn', '⚡ The spreadsheet was read, but ' + n + ' figure' + (n === 1 ? '' : 's') +
-      ' could not be matched to a row by name. Open the <strong>Connect</strong> tab to see ' +
-      'which rows were used.<br><span style="opacity:.8;font-size:10px;">· ' +
+      ' could not be matched to a row by name. ' +
+      (sync.isAdmin ? 'Open the <strong>Connect</strong> tab to see which rows were used.'
+                    : 'Please let Greg know.') +
+      '<br><span style="opacity:.8;font-size:10px;">· ' +
       sync.parseWarnings.slice(0, 3).join('<br>· ') +
       (n > 3 ? '<br>· …and ' + (n - 3) + ' more' : '') + '</span>');
   } else {
@@ -2819,6 +2886,7 @@ function renderConnect() {
 
 /** Validate, adopt and start syncing whatever was pasted. */
 async function connectSheet() {
+  if (!sync.isAdmin) return;   // Connect is Greg's (admins) only
   const input = document.getElementById('connect-url');
   const btn = document.getElementById('connect-btn');
   const parsed = parseSheetSource(input.value);
@@ -2864,6 +2932,7 @@ async function connectSheet() {
 }
 
 function disconnectSheet() {
+  if (!sync.isAdmin) return;   // Connect is Greg's (admins) only
   stopRealtime();
   stopPolling();
   sync.source = null;
@@ -2950,13 +3019,17 @@ async function launchDashboard(email) {
   // to somebody else's sheet.
   let record = null;
   try {
+    // '*' rather than a column list: an older database without the newer
+    // columns (is_admin, names) must still sign people in, not error out.
+    // Supabase stores auth emails lowercased, and the importer does the same.
     const { data, error } = await sb
       .from('clients')
-      .select('sheet_id, script_url, full_name')
-      .eq('email', email)
+      .select('*')
+      .eq('email', String(email).toLowerCase())
       .maybeSingle();
     if (error) throw error;
     record = data;
+    setAdmin(!!(record && record.is_admin));
   } catch (err) {
     console.error('[sync] client lookup failed', err);
     setStatus('error', 'Account not verified');
@@ -2972,11 +3045,16 @@ async function launchDashboard(email) {
   } else if (record && record.sheet_id) {
     source = { kind: 'sheet', id: record.sheet_id, gid: null, label: 'Google Sheet' };
   }
-  if (!source || source.error) source = loadStoredSource();
+  // A sheet remembered in this browser only applies to an admin. On a shared
+  // computer it may be Greg's, and must not open for someone else.
+  if ((!source || source.error) && sync.isAdmin) source = loadStoredSource();
+  if (source && source.error) source = null;
 
   if (!source) {
     setStatus('cached', 'Not connected');
-    setBanner('warn', '⚡ No spreadsheet is connected yet, so the figures below are sample data. Open the <strong>Connect</strong> tab to link your Google Sheet.');
+    setBanner('warn', sync.isAdmin
+      ? '⚡ No spreadsheet is connected yet, so the figures below are sample data. Open the <strong>Connect</strong> tab to link your Google Sheet.'
+      : '⚡ No cashflow sheet is linked to your account yet, so the figures below are sample data. Please contact Greg to have your sheet linked.');
     renderConnect();
     return;
   }
@@ -2991,6 +3069,376 @@ async function launchDashboard(email) {
   renderConnect();
 }
 
+/* --------------------------------------------------------------------------
+   Users tab — admins import and remove the people who can sign in.
+
+   Creating logins needs the service_role key, so the browser only prepares
+   and previews the list; the work happens in supabase/functions/admin-users,
+   which re-checks that the caller is an admin. Hiding the tab is convenience,
+   not security.
+   -------------------------------------------------------------------------- */
+
+// Supabase Edge Function (supabase/functions/admin-users). It runs inside
+// Supabase, which supplies the secret key itself — nothing to configure here.
+const ADMIN_FN = SUPABASE_URL + '/functions/v1/admin-users';
+const IMPORT_EMAIL_RE = /^[^\s@,;<>"]+@[^\s@,;<>"]+\.[A-Za-z]{2,}$/;
+let importRows = [];
+
+function esc(v) {
+  return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+function setAdmin(on) {
+  sync.isAdmin = !!on;
+  ['nb-users', 'nb-connect'].forEach(function (id) {
+    const nb = document.getElementById(id);
+    if (nb) nb.hidden = !on;
+  });
+  // A non-admin must never be left looking at an admin panel — e.g. after
+  // Greg signs out and someone else signs in on the same browser.
+  if (!on && ['tab-users', 'tab-connect'].some(function (id) {
+    const t = document.getElementById(id);
+    return t && t.classList.contains('active');
+  })) {
+    showTab('overview', document.querySelectorAll('.nb')[0]);
+  }
+}
+
+/** Split pasted Excel rows (tabs) or CSV (commas, with quoted fields). */
+function parseDelimited(text) {
+  const src = String(text || '').replace(/\r\n?/g, '\n');
+  const delim = src.indexOf('\t') >= 0 ? '\t' : ',';
+  const rows = [];
+  let row = [], field = '', quoted = false;
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (quoted) {
+      if (ch === '"') { if (src[i + 1] === '"') { field += '"'; i++; } else quoted = false; }
+      else field += ch;
+      continue;
+    }
+    if (ch === '"' && field === '') quoted = true;
+    else if (ch === delim) { row.push(field); field = ''; }
+    else if (ch === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+    else field += ch;
+  }
+  if (field !== '' || row.length) { row.push(field); rows.push(row); }
+  return rows.map(function (r) { return r.map(function (c) { return c.trim(); }); })
+             .filter(function (r) { return r.some(function (c) { return c !== ''; }); });
+}
+
+const IMPORT_COLUMNS = {
+  first_name:   /^(first|first ?name|given ?name)$/i,
+  last_name:    /^(last|last ?name|surname|family ?name)$/i,
+  company_name: /^(company|company ?name|business|business ?name)$/i,
+  email:        /^(e-?mail|email ?address|user ?name|username|login)$/i,
+  password:     /^(password|pass|pwd)$/i,
+  sheet:        /^(sheet|sheet ?link|sheet ?url|sheet ?id|google ?sheet|spreadsheet|spreadsheet ?link|cashflow ?sheet)$/i
+};
+
+// Supabase Auth refuses passwords shorter than 6 characters (its minimum
+// cannot be lowered), and bcrypt ignores anything past 72 bytes.
+const MIN_PASSWORD = 6;
+const MAX_PASSWORD = 72;
+
+/**
+ * Turn sheet rows into user objects.
+ *
+ * The header row is found by looking for an Email column in the first ten
+ * rows — Greg's workbook has a title on row 1 and the headings on row 3 — and
+ * anything above it is ignored. With a header the columns can be in any order
+ * and unknown columns are skipped. Without one the order is
+ * First name, Last name, Company name, Email, Password, Sheet link.
+ */
+function rowsToUsers(rows) {
+  if (!rows.length) return { users: [], ignored: [] };
+
+  let headerAt = -1;
+  for (let r = 0; r < Math.min(rows.length, 10); r++) {
+    if (rows[r].some(function (h) { return IMPORT_COLUMNS.email.test(String(h).trim()); })) { headerAt = r; break; }
+  }
+
+  let map = { first_name: 0, last_name: 1, company_name: 2, email: 3, password: 4, sheet: 5 };
+  let ignored = [];
+  let body = rows;
+  if (headerAt >= 0) {
+    map = {};
+    rows[headerAt].forEach(function (h, i) {
+      const label = String(h).trim();
+      const key = Object.keys(IMPORT_COLUMNS).find(function (k) { return IMPORT_COLUMNS[k].test(label); });
+      if (key && map[key] === undefined) map[key] = i;
+      else if (label) ignored.push(label);
+    });
+    body = rows.slice(headerAt + 1);
+  }
+  const pick = function (r, k) { return map[k] === undefined ? '' : String(r[map[k]] == null ? '' : r[map[k]]).trim(); };
+  return {
+    users: body.map(function (r) {
+      return {
+        first_name: pick(r, 'first_name'), last_name: pick(r, 'last_name'),
+        company_name: pick(r, 'company_name'), email: pick(r, 'email'),
+        password: pick(r, 'password'), sheet: pick(r, 'sheet')
+      };
+    // A row is blank if every column except Password is empty: Greg's sheet
+    // shows "0" in Password on its empty rows, which would otherwise read as
+    // users with no email.
+    }).filter(function (u) {
+      return u.first_name || u.last_name || u.company_name || u.email || u.sheet;
+    }),
+    ignored: ignored,
+    hasPasswordColumn: map.password !== undefined
+  };
+}
+
+function importMode() {
+  const el = document.querySelector('input[name="imp-mode"]:checked');
+  return el ? el.value : 'file';
+}
+
+function checkImportRow(u, seen, mode) {
+  const email = String(u.email || '').trim().toLowerCase();
+  if (!email) return 'missing email';
+  if (!IMPORT_EMAIL_RE.test(email)) return 'not a valid email';
+  if (seen[email]) return 'duplicate of line ' + seen[email];
+  if (mode === 'file') {
+    const pw = String(u.password || '');
+    if (!pw) return 'no password in the file';
+    if (pw.length < MIN_PASSWORD) return 'password must be at least ' + MIN_PASSWORD + ' characters (Supabase rule)';
+    if (pw.length > MAX_PASSWORD) return 'password is longer than ' + MAX_PASSWORD + ' characters';
+  }
+  const s = String(u.sheet || '').trim();
+  if (s && !/\/spreadsheets\/d\/[A-Za-z0-9_-]{20,}/.test(s) && !/^[A-Za-z0-9_-]{20,}$/.test(s)) {
+    return 'sheet link is not a Google Sheets link';
+  }
+  return null;
+}
+
+let importSourceRows = [];   // rows from the last file upload, before mapping
+
+function previewUsers(fromText) {
+  if (fromText !== false) importSourceRows = parseDelimited(document.getElementById('imp-text').value);
+  const el = document.getElementById('imp-preview');
+  const go = document.getElementById('imp-go');
+  const parsed = rowsToUsers(importSourceRows);
+  const mode = importMode();
+  const seen = {};
+  importRows = parsed.users.map(function (u, i) {
+    const problem = checkImportRow(u, seen, mode);
+    if (!problem) seen[String(u.email).trim().toLowerCase()] = i + 1;
+    return { user: u, problem: problem };
+  });
+  document.getElementById('imp-result').innerHTML = '';
+
+  if (!importRows.length) { el.innerHTML = ''; go.disabled = true; go.textContent = 'Import'; return; }
+
+  const good = importRows.filter(function (r) { return !r.problem; }).length;
+  let html = '';
+  if (parsed.ignored.length) {
+    html += '<div class="chelp" style="margin-bottom:6px;">Ignored column' + (parsed.ignored.length > 1 ? 's' : '') +
+            ': ' + parsed.ignored.map(esc).join(', ') + '</div>';
+  }
+  if (mode === 'file' && !parsed.hasPasswordColumn) {
+    html += '<div class="warn" style="margin-bottom:6px;">This file has no Password column. Add one, or choose a different sign-in option above.</div>';
+  }
+  html += '<div style="overflow-x:auto;"><table class="utab"><tr><th>#</th><th>First name</th><th>Last name</th><th>Company</th><th>Email</th>' +
+          (mode === 'file' ? '<th>Password</th>' : '') + '<th>Sheet</th><th>Check</th></tr>';
+  importRows.forEach(function (r, i) {
+    const u = r.user;
+    // Passwords are masked: the preview is on screen, often while sharing it.
+    const pw = u.password ? '•'.repeat(Math.min(u.password.length, 12)) + ' <span style="opacity:.5;">(' + u.password.length + ')</span>' : '';
+    html += '<tr><td>' + (i + 1) + '</td><td>' + esc(u.first_name) + '</td><td>' + esc(u.last_name) +
+            '</td><td>' + esc(u.company_name) + '</td><td>' + esc(u.email) + '</td>' +
+            (mode === 'file' ? '<td>' + pw + '</td>' : '') + '<td>' +
+            (u.sheet ? 'own sheet' : '<span style="opacity:.6;">default</span>') + '</td><td class="' +
+            (r.problem ? 'bad">' + esc(r.problem) : 'ok">ready') + '</td></tr>';
+  });
+  html += '</table></div>';
+  html += '<div class="chelp" style="margin-top:6px;">' + good + ' of ' + importRows.length + ' ready' +
+          (good < importRows.length ? ' — rows with a problem are skipped.' : '.') + '</div>';
+  el.innerHTML = html;
+  go.disabled = good === 0;
+  go.textContent = good ? 'Import ' + good + ' user' + (good === 1 ? '' : 's') : 'Import';
+}
+
+/** SheetJS, fetched only when an Excel file is actually uploaded. */
+let sheetJsLoading = null;
+function loadSheetJs() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  if (!sheetJsLoading) {
+    sheetJsLoading = new Promise(function (resolve, reject) {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      s.onload = function () { window.XLSX ? resolve(window.XLSX) : reject(new Error('Excel reader failed to load')); };
+      s.onerror = function () { sheetJsLoading = null; reject(new Error('Could not load the Excel reader. Check your connection, or save the sheet as CSV.')); };
+      document.head.appendChild(s);
+    });
+  }
+  return sheetJsLoading;
+}
+
+function readUserFile(input) {
+  const f = input.files && input.files[0];
+  if (!f) return;
+  const name = f.name || 'file';
+  const out = document.getElementById('imp-result');
+  const isExcel = /\.(xlsx|xlsm|xls)$/i.test(name);
+  const reader = new FileReader();
+
+  reader.onload = async function () {
+    input.value = '';
+    try {
+      if (isExcel) {
+        const XLSX = await loadSheetJs();
+        const wb = XLSX.read(new Uint8Array(reader.result), { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        // raw:false gives the text Excel displays, so a hyperlinked email or a
+        // numeric-looking password arrives exactly as Greg typed it.
+        importSourceRows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '', blankrows: false })
+          .map(function (r) { return r.map(function (c) { return String(c == null ? '' : c).trim(); }); });
+      } else {
+        importSourceRows = parseDelimited(String(reader.result || ''));
+      }
+      document.getElementById('imp-text').value = '';
+      document.getElementById('imp-file-name').textContent = name;
+      previewUsers(false);
+    } catch (e) {
+      out.innerHTML = '<div class="alert" style="margin:0;">⚠ Could not read ' + esc(name) + ': ' + esc(e.message || e) + '</div>';
+    }
+  };
+  if (isExcel) reader.readAsArrayBuffer(f); else reader.readAsText(f);
+}
+
+function downloadUserTemplate() {
+  const csv = 'First name,Last name,Company name,Email,Password,Sheet link\n' +
+              'Jane,Citizen,Citizen Builders,jane@example.com,ChangeMe2026,\n';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = 'dashboard-users-template.csv';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+}
+
+async function callAdmin(payload) {
+  const { data } = await sb.auth.getSession();
+  const token = data && data.session && data.session.access_token;
+  if (!token) throw new Error('Your session has expired. Sign in again.');
+  const res = await fetch(ADMIN_FN, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token, apikey: SUPABASE_KEY },
+    body: JSON.stringify(payload)
+  });
+  let body = null;
+  try { body = await res.json(); } catch (_) { /* handled below */ }
+  if (res.status === 404) {
+    throw new Error('The Import Users service is not set up yet. Create the "admin-users" Edge Function in Supabase (see README).');
+  }
+  if (!res.ok) throw new Error((body && (body.error || body.message || body.msg)) || ('Server returned ' + res.status));
+  return body;
+}
+
+async function importUsers() {
+  const go = document.getElementById('imp-go');
+  const out = document.getElementById('imp-result');
+  const mode = importMode();
+  // A file password is only sent when that is the option chosen.
+  const users = importRows.filter(function (r) { return !r.problem; }).map(function (r) {
+    const u = Object.assign({}, r.user);
+    if (mode !== 'file') delete u.password;
+    return u;
+  });
+  if (!users.length) return;
+
+  go.disabled = true;
+  go.textContent = 'Importing…';
+  out.innerHTML = '<div class="warn" style="margin:0;">◌ Creating ' + users.length + ' login' + (users.length === 1 ? '' : 's') + '…</div>';
+
+  try {
+    const r = await callAdmin({ action: 'import', mode: mode, users: users });
+    const label = { invited: 'invite sent', created: 'created', existing: 'already had a login — access updated', error: 'failed' };
+    const cls = { invited: 'ok', created: 'ok', existing: 'meh', error: 'bad' };
+    const withPw = r.results.filter(function (x) { return x.password; });
+
+    let html = '<div class="' + (r.summary.errors ? 'warn' : 'good') + '" style="margin:0 0 8px;">' +
+      (r.summary.invited ? r.summary.invited + ' invited · ' : '') +
+      (r.summary.created ? r.summary.created + ' created · ' : '') +
+      (r.summary.existing ? r.summary.existing + ' already existed · ' : '') +
+      r.summary.errors + ' failed</div>';
+    if (withPw.length) {
+      html += '<div class="alert" style="margin:0 0 8px;">These temporary passwords are shown <strong>once</strong>. ' +
+              'Copy them now and send each person their own. ' +
+              '<button class="cbtn ghost" type="button" style="padding:4px 10px;margin-left:6px;" onclick="copyImportPasswords()">Copy all</button></div>';
+    }
+    html += '<div style="overflow-x:auto;"><table class="utab"><tr><th>Email</th><th>Result</th>' +
+            (withPw.length ? '<th>Temporary password</th>' : '') + '</tr>';
+    r.results.forEach(function (x) {
+      html += '<tr><td>' + esc(x.email) + '</td><td class="' + cls[x.status] + '">' + esc(label[x.status] || x.status) +
+              (x.error ? ': ' + esc(x.error) : '') + '</td>' +
+              (withPw.length ? '<td>' + (x.password ? '<code>' + esc(x.password) + '</code>' : '') + '</td>' : '') + '</tr>';
+    });
+    html += '</table></div>';
+    out.innerHTML = html;
+    lastImportPasswords = withPw.map(function (x) { return x.email + '\t' + x.password; }).join('\n');
+
+    document.getElementById('imp-text').value = '';
+    document.getElementById('imp-file-name').textContent = '';
+    importRows = [];
+    importSourceRows = [];   // the uploaded file, passwords included, is dropped
+    document.getElementById('imp-preview').innerHTML = '';
+    loadUsers();
+  } catch (e) {
+    out.innerHTML = '<div class="alert" style="margin:0;">⚠ ' + esc(e.message || e) + '</div>';
+  } finally {
+    go.textContent = 'Import';
+    go.disabled = !importRows.some(function (r) { return !r.problem; });
+  }
+}
+
+let lastImportPasswords = '';
+function copyImportPasswords() {
+  if (!lastImportPasswords) return;
+  if (navigator.clipboard) navigator.clipboard.writeText(lastImportPasswords).catch(function () {});
+}
+
+async function loadUsers() {
+  const el = document.getElementById('users-list');
+  if (!el || !sync.isAdmin) return;
+  el.innerHTML = '<div class="chelp">Loading…</div>';
+  try {
+    const r = await callAdmin({ action: 'list' });
+    const users = r.users || [];
+    if (!users.length) { el.innerHTML = '<div class="chelp">No users yet.</div>'; return; }
+    let html = '<div class="card" style="overflow-x:auto;"><table class="utab"><tr><th>Name</th><th>Company</th><th>Email</th><th>Sheet</th><th>Role</th><th></th></tr>';
+    users.forEach(function (u) {
+      const name = u.full_name || [u.first_name, u.last_name].filter(Boolean).join(' ');
+      const me = String(u.email).toLowerCase() === String(sync.email || '').toLowerCase();
+      html += '<tr><td>' + esc(name) + '</td><td>' + esc(u.company_name) + '</td><td>' + esc(u.email) + '</td><td>' +
+              (u.sheet_id ? '<span title="' + esc(u.sheet_id) + '">…' + esc(String(u.sheet_id).slice(-8)) + '</span>' : '<span class="meh">none</span>') +
+              '</td><td>' + (u.is_admin ? '<span class="ok">admin</span>' : 'user') + '</td><td>' +
+              (me ? '<span style="opacity:.5;">you</span>'
+                  : '<button class="cbtn ghost" type="button" style="padding:4px 10px;" data-email="' + esc(u.email) +
+                    '" onclick="removeUser(this.dataset.email)">Remove</button>') +
+              '</td></tr>';
+    });
+    html += '</table></div>';
+    el.innerHTML = html;
+  } catch (e) {
+    el.innerHTML = '<div class="alert">⚠ ' + esc(e.message || e) + '</div>';
+  }
+}
+
+async function removeUser(email) {
+  if (!email || !confirm('Remove access for ' + email + '?\nTheir login is deleted and they can no longer sign in.')) return;
+  try {
+    await callAdmin({ action: 'remove', email: email });
+  } catch (e) {
+    alert('Could not remove ' + email + ': ' + (e.message || e));
+  }
+  loadUsers();
+}
+
 async function handleLogout() {
   stopRealtime();
   stopPolling();
@@ -2999,6 +3447,7 @@ async function handleLogout() {
   sync.scriptUrl = null;
   sync.source = null;
   sync.lastUpdated = null;
+  setAdmin(false);
 
   await sb.auth.signOut();
 

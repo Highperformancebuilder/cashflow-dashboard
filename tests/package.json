@@ -5,8 +5,8 @@
   "description": "Test tooling for the cashflow dashboard. Deliberately NOT in the repo root: Netlify runs `npm install` whenever it finds a package.json in the base directory, and the site itself has no build step and no runtime dependencies.",
   "scripts": {
     "serve": "node server.js",
-    "test": "node url-test.js && node rowdetect-test.js",
-    "test:unit": "node url-test.js && node rowdetect-test.js",
+    "test": "node url-test.js && node rowdetect-test.js && node admin-fn-test.js",
+    "test:unit": "node url-test.js && node rowdetect-test.js && node admin-fn-test.js",
     "test:e2e": "node e2e.js",
     "test:e2e:nochart": "node e2e.js --no-chart",
     "test:degraded": "node degraded.js",
@@ -14,7 +14,9 @@
     "test:tabs": "node tabs.js",
     "test:hover": "node hover.js",
     "test:fyperf": "node fyperf.js",
-    "test:clients": "node clients.js"
+    "test:clients": "node clients.js",
+    "test:users": "node users.js",
+    "test:admin-fn": "node admin-fn-test.js"
   },
   "devDependencies": {
     "playwright": "^1.47.0"

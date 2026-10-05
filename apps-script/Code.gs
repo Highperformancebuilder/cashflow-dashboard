@@ -10,7 +10,8 @@
  * SETUP — see README.md. In short:
  *   Extensions > Apps Script, paste this file, then set Script Properties:
  *     SHEET_ID              1MXTCOStUpHpGYrthqRb8NCuERbUIeyZcRZVvdG4P15c
- *     SUPABASE_URL          https://abhmonhsiluraykelrpp.supabase.co
+ *     SUPABASE_URL          https://kgjsqsdpwehcebyhkhql.supabase.co
+ *                           (previously https://abhmonhsiluraykelrpp.supabase.co)
  *     SUPABASE_SERVICE_KEY  service_role key (server-side only, never in the browser)
  *   Run installTrigger() once, then Deploy > New deployment > Web app
  *   (Execute as: Me — Who has access: Anyone).

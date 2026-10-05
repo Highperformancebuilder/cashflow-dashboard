@@ -24,7 +24,8 @@ const mutate = (v) => new Promise(r => http.get('http://localhost:8099/__mutate?
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
 
   // Signed in, but with no sheet on the account — the Connect-tab path.
-  await page.addInitScript('window.__clientRow = null;');
+  // Connect is admin-only: an admin with no sheet linked yet.
+  await page.addInitScript('window.__clientRow = { is_admin: true, sheet_id: null };');
   await page.addInitScript(STUB);
   await page.goto('http://localhost:8099/', { waitUntil: 'networkidle' });
   const ev = async (fn, a) => { try { return await page.evaluate(fn, a); } catch (e) { return { __err: e.message }; } };
@@ -76,7 +77,7 @@ const mutate = (v) => new Promise(r => http.get('http://localhost:8099/__mutate?
   check('data actually loaded', (await ev(() => WEEKLY.length)) === 60);
   check('input cleared after success', (await ev(() => document.getElementById('connect-url').value)) === '');
   check('"currently connected" panel appears', /currently connected/i.test(await page.textContent('#tab-connect')));
-  check('panel offers Disconnect', await page.isVisible('button.cbtn.ghost'));
+  check('panel offers Disconnect', await page.isVisible('#connect-current button.cbtn.ghost'));
   check('connection persisted to localStorage',
     (await ev(() => { const r = localStorage.getItem('gj_cashflow_source'); return r ? JSON.parse(r).id : null; })) === SHEET);
   check('sync banner cleared on success', (await page.textContent('#sync-banner')).trim() === '');

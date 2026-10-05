@@ -1,0 +1,9 @@
+# Only used if the function is deployed with the Supabase CLI
+# (`supabase functions deploy admin-users`). Deploying from the dashboard,
+# turn "Enforce JWT verification" off instead — same effect.
+#
+# The function verifies the caller's token itself (against Supabase Auth) and
+# then checks they are an admin. The gateway's own JWT check is switched off
+# because it rejects tokens signed with the new JWT signing keys.
+[functions.admin-users]
+verify_jwt = false
