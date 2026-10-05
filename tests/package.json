@@ -16,7 +16,8 @@
     "test:fyperf": "node fyperf.js",
     "test:clients": "node clients.js",
     "test:users": "node users.js",
-    "test:admin-fn": "node admin-fn-test.js"
+    "test:admin-fn": "node admin-fn-test.js",
+    "test:privacy": "node privacy.js"
   },
   "devDependencies": {
     "playwright": "^1.47.0"

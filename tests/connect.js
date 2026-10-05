@@ -24,8 +24,8 @@ const mutate = (v) => new Promise(r => http.get('http://localhost:8099/__mutate?
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
 
   // Signed in, but with no sheet on the account — the Connect-tab path.
-  // Connect is admin-only: an admin with no sheet linked yet.
-  await page.addInitScript('window.__clientRow = { is_admin: true, sheet_id: null };');
+  // An ordinary (non-admin) user with no sheet linked yet: Connect is for everyone.
+  await page.addInitScript('window.__clientRow = null;');
   await page.addInitScript(STUB);
   await page.goto('http://localhost:8099/', { waitUntil: 'networkidle' });
   const ev = async (fn, a) => { try { return await page.evaluate(fn, a); } catch (e) { return { __err: e.message }; } };

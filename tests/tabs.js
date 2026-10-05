@@ -21,8 +21,8 @@ async function session(pre) {
   await isolate(page);
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
-  // Connect is admin-only: an admin with no sheet linked yet.
-  await page.addInitScript('window.__clientRow = { is_admin: true, sheet_id: null };');
+  // An ordinary (non-admin) user with no sheet linked yet: Connect is for everyone.
+  await page.addInitScript('window.__clientRow = null;');
   if (pre) await page.addInitScript(pre);
   await page.addInitScript(STUB);
   await page.goto('http://localhost:8099/', { waitUntil: 'networkidle' });

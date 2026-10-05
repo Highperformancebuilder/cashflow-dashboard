@@ -423,8 +423,8 @@ tr:hover td{background:rgba(49,81,80,.08)}
   <button class="nb" onclick="showTab('monthly',this)">FY Performance</button>
   <button class="nb" onclick="showTab('clients',this)">Clients</button>
   <button class="nb" onclick="showTab('accounts',this)">4 Accounts</button>
-  <!-- Connect and Import Users are Greg's (admins) only; setAdmin() shows them. -->
-  <button class="nb" id="nb-connect" onclick="showTab('connect',this)" hidden>Connect</button>
+  <!-- Connect is for every signed-in user. Import Users is admins (Greg) only. -->
+  <button class="nb" id="nb-connect" onclick="showTab('connect',this)">Connect</button>
   <!-- Only shown to admins (clients.is_admin); the server checks again. -->
   <button class="nb" id="nb-users" onclick="showTab('users',this)" hidden>Import Users</button>
 </div>
@@ -451,16 +451,16 @@ tr:hover td{background:rgba(49,81,80,.08)}
   </div>
   <span class="lbl" id="ytd-heading">Year to Date — FY2026 (1 Jul 2025 – 30 Jun 2026)</span>
   <div class="g3">
-    <div class="stat"><div class="mn" style="color:#ccf492" id="ytd-sales"></div><div class="sl">Total Sales</div><div class="ss">FY26 to date</div></div>
-    <div class="stat"><div class="mn" style="color:#3b82f6" id="ytd-in"></div><div class="sl">Total In</div><div class="ss">FY26 to date</div></div>
-    <div class="stat"><div class="mn" style="color:#f59e0b" id="ytd-out"></div><div class="sl">Total Out</div><div class="ss">FY26 to date</div></div>
+    <div class="stat"><div class="mn" style="color:#ccf492" id="ytd-sales"></div><div class="sl">Total Sales</div><div class="ss">Financial year to date</div></div>
+    <div class="stat"><div class="mn" style="color:#3b82f6" id="ytd-in"></div><div class="sl">Total In</div><div class="ss">Financial year to date</div></div>
+    <div class="stat"><div class="mn" style="color:#f59e0b" id="ytd-out"></div><div class="sl">Total Out</div><div class="ss">Financial year to date</div></div>
   </div>
   <span class="lbl">Revenue — FY Comparison</span>
   <div class="card"><div class="cw"><canvas id="fy-chart"></canvas></div>
     <div style="display:flex;justify-content:space-around;font-size:10px;color:#d0dbd6;margin-top:8px">
-      <div style="text-align:center"><div style="color:#475569;font-size:13px;font-weight:800" id="fy24v"></div><div style="opacity:.5">FY24</div></div>
-      <div style="text-align:center"><div style="color:#315150;font-size:13px;font-weight:800" id="fy25v"></div><div style="opacity:.5">FY25</div></div>
-      <div style="text-align:center"><div style="color:#ccf492;font-size:13px;font-weight:800" id="fy26v"></div><div style="opacity:.5">FY26 YTD</div></div>
+      <div style="text-align:center"><div style="color:#475569;font-size:13px;font-weight:800" id="fy24v"></div><div style="opacity:.5" id="fy24l">FY24</div></div>
+      <div style="text-align:center"><div style="color:#315150;font-size:13px;font-weight:800" id="fy25v"></div><div style="opacity:.5" id="fy25l">FY25</div></div>
+      <div style="text-align:center"><div style="color:#ccf492;font-size:13px;font-weight:800" id="fy26v"></div><div style="opacity:.5" id="fy26l">FY26 YTD</div></div>
     </div>
   </div>
   <span class="lbl">12 Week Cash Position</span>
@@ -509,12 +509,14 @@ tr:hover td{background:rgba(49,81,80,.08)}
   <div id="accounts-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px;"></div>
   <div id="accounts-total"></div>
 
+  <div id="accounts-obligations" hidden>
   <span class="lbl">Finance Obligations</span>
   <div style="display:flex;flex-direction:column;gap:6px;">
     <div class="oblig"><span>VW Amarok — Loan</span><span style="color:#f59e0b;font-weight:700;">Ends Feb 2028</span></div>
     <div class="oblig"><span>Hyster Forklift — P&amp;E Loan</span><span style="color:#f59e0b;font-weight:700;">Ends Aug 2027</span></div>
     <div class="oblig"><span>Isuzu Truck — Loan</span><span style="color:#f59e0b;font-weight:700;">Ends Dec 2029</span></div>
     <div class="oblig"><span>Solar Repayments</span><span style="color:#f59e0b;font-weight:700;">Ends Feb 2027</span></div>
+  </div>
   </div>
 </div>
 <!-- USERS (admins only) -->
@@ -608,13 +610,18 @@ tr:hover td{background:rgba(49,81,80,.08)}
 
 <script>
 
-const CLIENTS=[{"name": "Christian College", "total": 253102, "invoices": 6, "last_payment": "26 Mar 2026", "contracted_ahead": 0, "lifetime": 1490154}, {"name": "David McDonald", "total": 230596, "invoices": 9, "last_payment": "25 Jun 2026", "contracted_ahead": 47499, "lifetime": 262379}, {"name": "Winstar Construction", "total": 116296, "invoices": 9, "last_payment": "11 Jun 2026", "contracted_ahead": 12095, "lifetime": 125264}, {"name": "Walker Construction Group", "total": 114649, "invoices": 6, "last_payment": "02 Apr 2026", "contracted_ahead": 0, "lifetime": 236407}, {"name": "VDB Homes", "total": 104608, "invoices": 7, "last_payment": "18 Jun 2026", "contracted_ahead": 10625, "lifetime": 674940}, {"name": "Deltex Constructions", "total": 98650, "invoices": 7, "last_payment": "18 Jun 2026", "contracted_ahead": 1928, "lifetime": 214830}, {"name": "27th Avenue Constructions", "total": 89539, "invoices": 2, "last_payment": "21 May 2026", "contracted_ahead": 0, "lifetime": 89539}, {"name": "Built By Wilson", "total": 71959, "invoices": 2, "last_payment": "11 Jun 2026", "contracted_ahead": 35979, "lifetime": 179897}, {"name": "Boorinda Pastoral Company", "total": 68000, "invoices": 1, "last_payment": "28 May 2026", "contracted_ahead": 0, "lifetime": 68000}, {"name": "Larkin", "total": 56044, "invoices": 3, "last_payment": "18 Jun 2026", "contracted_ahead": 30204, "lifetime": 201399}, {"name": "KBD Constructions", "total": 54375, "invoices": 2, "last_payment": "25 Jun 2026", "contracted_ahead": 32625, "lifetime": 54375}, {"name": "Cromer Builders", "total": 43102, "invoices": 5, "last_payment": "25 Jun 2026", "contracted_ahead": 5369, "lifetime": 223839}, {"name": "CL Constructions", "total": 26647, "invoices": 3, "last_payment": "18 Jun 2026", "contracted_ahead": 9354, "lifetime": 181830}, {"name": "Character Building", "total": 24206, "invoices": 3, "last_payment": "30 Apr 2026", "contracted_ahead": 0, "lifetime": 56026}, {"name": "Horizon Building", "total": 23691, "invoices": 3, "last_payment": "12 Feb 2026", "contracted_ahead": 0, "lifetime": 25123}, {"name": "Sons Construct", "total": 14805, "invoices": 2, "last_payment": "09 Apr 2026", "contracted_ahead": 0, "lifetime": 14805}, {"name": "TG Builders", "total": 13908, "invoices": 2, "last_payment": "05 Mar 2026", "contracted_ahead": 0, "lifetime": 88855}, {"name": "Enzie", "total": 10632, "invoices": 4, "last_payment": "28 May 2026", "contracted_ahead": 0, "lifetime": 33864}, {"name": "RMS Traders", "total": 8797, "invoices": 3, "last_payment": "07 May 2026", "contracted_ahead": 0, "lifetime": 8797}, {"name": "Grylls Constructions", "total": 3324, "invoices": 2, "last_payment": "27 Nov 2025", "contracted_ahead": 0, "lifetime": 3324}, {"name": "Avery Constructions", "total": 3118, "invoices": 1, "last_payment": "28 Aug 2025", "contracted_ahead": 0, "lifetime": 541866}, {"name": "A & G Pengelly", "total": 2750, "invoices": 1, "last_payment": "21 May 2026", "contracted_ahead": 0, "lifetime": 3200}, {"name": "Zeally Build", "total": 2277, "invoices": 3, "last_payment": "28 May 2026", "contracted_ahead": 0, "lifetime": 34640}];
+// No figures ship with the page. Everything below is filled from the signed-in
+// user's own connected spreadsheet; until then every tab shows an empty state.
+// (These used to hold Greg's real figures and client list as "sample data",
+// readable by anyone through View Source.)
+const CLIENTS=[];
 
-const WEEKLY=[{"idx": 0, "label": "03 Jul 25", "iso": "2025-07-03", "opening": -28889.79, "sales": 0.0, "other_income": 11849.0, "total_in": 11849.0, "supplier": 16871.49, "total_out": 30205.02, "closing": -47245.81}, {"idx": 1, "label": "10 Jul 25", "iso": "2025-07-10", "opening": -47245.81, "sales": 21540.86, "other_income": 0.0, "total_in": 21540.86, "supplier": 0.0, "total_out": 20809.01, "closing": -46513.96}, {"idx": 2, "label": "17 Jul 25", "iso": "2025-07-17", "opening": -46513.96, "sales": 9192.2, "other_income": 0.0, "total_in": 9192.2, "supplier": 0.0, "total_out": 10404.72, "closing": -47726.48}, {"idx": 3, "label": "24 Jul 25", "iso": "2025-07-24", "opening": -47726.48, "sales": 0.0, "other_income": 9230.0, "total_in": 9230.0, "supplier": 755.19, "total_out": 23311.27, "closing": -61807.75}, {"idx": 4, "label": "31 Jul 25", "iso": "2025-07-31", "opening": -61807.75, "sales": 46518.83, "other_income": 9000.0, "total_in": 55518.83, "supplier": 702.41, "total_out": 13662.03, "closing": -19950.95}, {"idx": 5, "label": "07 Aug 25", "iso": "2025-08-07", "opening": -19950.95, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 14963.49, "total_out": 33543.46, "closing": -53494.41}, {"idx": 6, "label": "14 Aug 25", "iso": "2025-08-14", "opening": -53494.41, "sales": 0.0, "other_income": 3500.0, "total_in": 3500.0, "supplier": 1637.0, "total_out": 14949.41, "closing": -64943.82}, {"idx": 7, "label": "21 Aug 25", "iso": "2025-08-21", "opening": -64943.82, "sales": 88582.81, "other_income": 0.0, "total_in": 88582.81, "supplier": 19817.51, "total_out": 41730.72, "closing": -18091.73}, {"idx": 8, "label": "28 Aug 25", "iso": "2025-08-28", "opening": -18091.73, "sales": 32272.0, "other_income": 467.04, "total_in": 32739.04, "supplier": 14933.0, "total_out": 28958.52, "closing": -14311.21}, {"idx": 9, "label": "04 Sep 25", "iso": "2025-09-04", "opening": -14311.21, "sales": 9900.0, "other_income": 0.0, "total_in": 9900.0, "supplier": 10691.5, "total_out": 27593.55, "closing": -32004.76}, {"idx": 10, "label": "11 Sep 25", "iso": "2025-09-11", "opening": -32004.76, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 9284.79, "closing": -41289.55}, {"idx": 11, "label": "18 Sep 25", "iso": "2025-09-18", "opening": -41289.55, "sales": 13250.44, "other_income": 0.0, "total_in": 13250.44, "supplier": 11379.28, "total_out": 30054.43, "closing": -58093.54}, {"idx": 12, "label": "25 Sep 25", "iso": "2025-09-25", "opening": -58093.54, "sales": 11000.0, "other_income": 0.0, "total_in": 11000.0, "supplier": 14537.83, "total_out": 27251.22, "closing": -74344.76}, {"idx": 13, "label": "02 Oct 25", "iso": "2025-10-02", "opening": -74344.76, "sales": 0.0, "other_income": 23000.0, "total_in": 23000.0, "supplier": 5070.68, "total_out": 33286.84, "closing": -84631.6}, {"idx": 14, "label": "09 Oct 25", "iso": "2025-10-09", "opening": -84631.6, "sales": 17545.61, "other_income": 9900.0, "total_in": 27445.61, "supplier": 3184.14, "total_out": 12513.86, "closing": -69699.85}, {"idx": 15, "label": "16 Oct 25", "iso": "2025-10-16", "opening": -69699.85, "sales": 50400.0, "other_income": 4560.0, "total_in": 54960.0, "supplier": 11815.9, "total_out": 28669.01, "closing": -43408.86}, {"idx": 16, "label": "23 Oct 25", "iso": "2025-10-23", "opening": -43408.86, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 10743.21, "closing": -54152.07}, {"idx": 17, "label": "30 Oct 25", "iso": "2025-10-30", "opening": -54152.07, "sales": 2061.99, "other_income": 0.0, "total_in": 2061.99, "supplier": 174.27, "total_out": 20874.52, "closing": -72964.6}, {"idx": 18, "label": "06 Nov 25", "iso": "2025-11-06", "opening": -72964.6, "sales": 25060.7, "other_income": 11000.0, "total_in": 36060.7, "supplier": 7106.0, "total_out": 26991.85, "closing": -63895.75}, {"idx": 19, "label": "13 Nov 25", "iso": "2025-11-13", "opening": -63895.75, "sales": 24535.27, "other_income": 0.0, "total_in": 24535.27, "supplier": 12809.54, "total_out": 30051.21, "closing": -69411.69}, {"idx": 20, "label": "20 Nov 25", "iso": "2025-11-20", "opening": -69411.69, "sales": 0.0, "other_income": 2000.0, "total_in": 2000.0, "supplier": 8068.76, "total_out": 19766.93, "closing": -87178.62}, {"idx": 21, "label": "27 Nov 25", "iso": "2025-11-27", "opening": -87178.62, "sales": 91677.31, "other_income": 5700.0, "total_in": 97377.31, "supplier": 7818.45, "total_out": 28439.37, "closing": -18240.68}, {"idx": 22, "label": "04 Dec 25", "iso": "2025-12-04", "opening": -18240.68, "sales": 12035.98, "other_income": 0.0, "total_in": 12035.98, "supplier": 6146.45, "total_out": 23627.28, "closing": -29831.98}, {"idx": 23, "label": "11 Dec 25", "iso": "2025-12-11", "opening": -29831.98, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 27747.61, "total_out": 46543.83, "closing": -76375.81}, {"idx": 24, "label": "18 Dec 25", "iso": "2025-12-18", "opening": -76375.81, "sales": 4868.65, "other_income": 0.0, "total_in": 4868.65, "supplier": 0.0, "total_out": 9925.45, "closing": -81432.61}, {"idx": 25, "label": "25 Dec 25", "iso": "2025-12-25", "opening": -81432.61, "sales": 116673.77, "other_income": 0.0, "total_in": 116673.77, "supplier": 20078.86, "total_out": 42308.42, "closing": -7067.26}, {"idx": 26, "label": "01 Jan 26", "iso": "2026-01-01", "opening": -7067.26, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 12445.74, "closing": -19513.0}, {"idx": 27, "label": "08 Jan 26", "iso": "2026-01-08", "opening": -19513.0, "sales": 16190.47, "other_income": 0.0, "total_in": 16190.47, "supplier": 19865.71, "total_out": 38257.71, "closing": -41580.24}, {"idx": 28, "label": "15 Jan 26", "iso": "2026-01-15", "opening": -41580.24, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 9238.88, "closing": -50819.12}, {"idx": 29, "label": "22 Jan 26", "iso": "2026-01-22", "opening": -50819.12, "sales": 73290.9, "other_income": 0.0, "total_in": 73290.9, "supplier": 13848.21, "total_out": 33721.29, "closing": -11249.51}, {"idx": 30, "label": "29 Jan 26", "iso": "2026-01-29", "opening": -11249.51, "sales": 9985.08, "other_income": 0.0, "total_in": 9985.08, "supplier": 35625.71, "total_out": 55853.69, "closing": -57118.12}, {"idx": 31, "label": "05 Feb 26", "iso": "2026-02-05", "opening": -57118.12, "sales": 57144.21, "other_income": 0.0, "total_in": 57144.21, "supplier": 4636.07, "total_out": 23462.6, "closing": -23436.51}, {"idx": 32, "label": "12 Feb 26", "iso": "2026-02-12", "opening": -23436.51, "sales": 7748.38, "other_income": 0.0, "total_in": 7748.38, "supplier": 31341.99, "total_out": 40702.32, "closing": -56390.45}, {"idx": 33, "label": "19 Feb 26", "iso": "2026-02-19", "opening": -56390.45, "sales": 18132.67, "other_income": 0.0, "total_in": 18132.67, "supplier": 10957.84, "total_out": 38312.05, "closing": -76569.83}, {"idx": 34, "label": "26 Feb 26", "iso": "2026-02-26", "opening": -76569.83, "sales": 49127.0, "other_income": 0.0, "total_in": 49127.0, "supplier": 1326.02, "total_out": 17128.53, "closing": -44571.36}, {"idx": 35, "label": "05 Mar 26", "iso": "2026-03-05", "opening": -44571.36, "sales": 8344.97, "other_income": 0.0, "total_in": 8344.97, "supplier": 13430.05, "total_out": 31325.37, "closing": -67551.76}, {"idx": 36, "label": "12 Mar 26", "iso": "2026-03-12", "opening": -67551.76, "sales": 27982.22, "other_income": 0.0, "total_in": 27982.22, "supplier": 0.0, "total_out": 8553.93, "closing": -48123.47}, {"idx": 37, "label": "19 Mar 26", "iso": "2026-03-19", "opening": -48123.47, "sales": 42047.12, "other_income": 0.0, "total_in": 42047.12, "supplier": 3421.0, "total_out": 32365.4, "closing": -38441.75}, {"idx": 38, "label": "26 Mar 26", "iso": "2026-03-26", "opening": -38441.75, "sales": 17868.93, "other_income": 0.0, "total_in": 17868.93, "supplier": 28121.47, "total_out": 37784.02, "closing": -58356.84}, {"idx": 39, "label": "02 Apr 26", "iso": "2026-04-02", "opening": -58356.84, "sales": 2818.87, "other_income": 0.0, "total_in": 2818.87, "supplier": 2413.4, "total_out": 21943.13, "closing": -77481.1}, {"idx": 40, "label": "09 Apr 26", "iso": "2026-04-09", "opening": -77481.1, "sales": 24671.61, "other_income": 0.0, "total_in": 24671.61, "supplier": 7182.47, "total_out": 22191.4, "closing": -75000.89}, {"idx": 41, "label": "16 Apr 26", "iso": "2026-04-16", "opening": -75000.89, "sales": 39673.0, "other_income": 13880.34, "total_in": 53553.34, "supplier": 14188.63, "total_out": 31711.68, "closing": -53159.23}, {"idx": 42, "label": "23 Apr 26", "iso": "2026-04-23", "opening": -53159.23, "sales": 7514.32, "other_income": 0.0, "total_in": 7514.32, "supplier": 701.82, "total_out": 15869.22, "closing": -61514.13}, {"idx": 43, "label": "30 Apr 26", "iso": "2026-04-30", "opening": -61514.13, "sales": 104278.23, "other_income": 0.0, "total_in": 104278.23, "supplier": 9672.95, "total_out": 33493.64, "closing": 9270.46}, {"idx": 44, "label": "07 May 26", "iso": "2026-05-07", "opening": 9270.46, "sales": 16842.91, "other_income": 3000.0, "total_in": 19842.91, "supplier": 22272.3, "total_out": 34306.87, "closing": -5193.5}, {"idx": 45, "label": "14 May 26", "iso": "2026-05-14", "opening": -5193.5, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 9447.8, "total_out": 31945.31, "closing": -37138.81}, {"idx": 46, "label": "21 May 26", "iso": "2026-05-21", "opening": -37138.81, "sales": 56893.68, "other_income": 0.0, "total_in": 56893.68, "supplier": 24483.36, "total_out": 36837.53, "closing": -17082.66}, {"idx": 47, "label": "28 May 26", "iso": "2026-05-28", "opening": -17082.66, "sales": 71662.0, "other_income": 216.58, "total_in": 71878.58, "supplier": 11647.04, "total_out": 37475.16, "closing": 17320.76}, {"idx": 48, "label": "04 Jun 26", "iso": "2026-06-04", "opening": 17320.76, "sales": 12359.05, "other_income": 0.0, "total_in": 12359.05, "supplier": 23210.9, "total_out": 40837.26, "closing": -11157.45}, {"idx": 49, "label": "11 Jun 26", "iso": "2026-06-11", "opening": -11157.45, "sales": 48576.91, "other_income": 0.0, "total_in": 48576.91, "supplier": 1444.57, "total_out": 17764.34, "closing": 19655.12}, {"idx": 50, "label": "18 Jun 26", "iso": "2026-06-18", "opening": 19655.12, "sales": 58246.45, "other_income": 0.0, "total_in": 58246.45, "supplier": 10314.1, "total_out": 26667.63, "closing": 51233.94}, {"idx": 51, "label": "25 Jun 26", "iso": "2026-06-25", "opening": 51233.94, "sales": 92124.01, "other_income": 0.0, "total_in": 92124.01, "supplier": 7020.2, "total_out": 27960.0, "closing": 115397.95}, {"idx": 52, "label": "02 Jul 26", "iso": "2026-07-02", "opening": 115397.95, "sales": 46441.42, "other_income": 0.0, "total_in": 46441.42, "supplier": 38286.71, "total_out": 48343.13, "closing": 113496.24}, {"idx": 53, "label": "09 Jul 26", "iso": "2026-07-09", "opening": 113496.24, "sales": 136769.66, "other_income": 0.0, "total_in": 136769.66, "supplier": 0.0, "total_out": 16794.66, "closing": 233471.24}, {"idx": 54, "label": "16 Jul 26", "iso": "2026-07-16", "opening": 233471.24, "sales": 5000.0, "other_income": 0.0, "total_in": 5000.0, "supplier": 0.0, "total_out": 16442.52, "closing": 222028.72}, {"idx": 55, "label": "23 Jul 26", "iso": "2026-07-23", "opening": 222028.72, "sales": 116100.31, "other_income": 0.0, "total_in": 116100.31, "supplier": 0.0, "total_out": 21967.46, "closing": 316161.57}, {"idx": 56, "label": "30 Jul 26", "iso": "2026-07-30", "opening": 316161.57, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 2885.79, "total_out": 12942.21, "closing": 303219.36}, {"idx": 57, "label": "06 Aug 26", "iso": "2026-08-06", "opening": 303219.36, "sales": 25000.0, "other_income": 0.0, "total_in": 25000.0, "supplier": 60000.0, "total_out": 76794.66, "closing": 251424.7}, {"idx": 58, "label": "13 Aug 26", "iso": "2026-08-13", "opening": 251424.7, "sales": 49074.51, "other_income": 0.0, "total_in": 49074.51, "supplier": 0.0, "total_out": 8194.66, "closing": 292304.55}, {"idx": 59, "label": "20 Aug 26", "iso": "2026-08-20", "opening": 292304.55, "sales": 107935.84, "other_income": 0.0, "total_in": 107935.84, "supplier": 0.0, "total_out": 25042.52, "closing": 375197.87}, {"idx": 60, "label": "27 Aug 26", "iso": "2026-08-27", "opening": 375197.87, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 13367.46, "closing": 361830.41}, {"idx": 61, "label": "03 Sep 26", "iso": "2026-09-03", "opening": 361830.41, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 18656.42, "closing": 343173.99}, {"idx": 62, "label": "10 Sep 26", "iso": "2026-09-10", "opening": 343173.99, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 8194.66, "closing": 334979.33}, {"idx": 63, "label": "17 Sep 26", "iso": "2026-09-17", "opening": 334979.33, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 16794.66, "closing": 318184.67}, {"idx": 64, "label": "24 Sep 26", "iso": "2026-09-24", "opening": 318184.67, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 16442.52, "closing": 301742.15}, {"idx": 65, "label": "01 Oct 26", "iso": "2026-10-01", "opening": 301742.15, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 21967.46, "closing": 279774.69}, {"idx": 66, "label": "08 Oct 26", "iso": "2026-10-08", "opening": 279774.69, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 10056.42, "closing": 269718.27}, {"idx": 67, "label": "15 Oct 26", "iso": "2026-10-15", "opening": 269718.27, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 16794.66, "closing": 252923.61}, {"idx": 68, "label": "22 Oct 26", "iso": "2026-10-22", "opening": 252923.61, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 8194.66, "closing": 244728.95}, {"idx": 69, "label": "29 Oct 26", "iso": "2026-10-29", "opening": 244728.95, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 25042.52, "closing": 219686.43}, {"idx": 70, "label": "05 Nov 26", "iso": "2026-11-05", "opening": 219686.43, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 13367.46, "closing": 206318.97}, {"idx": 71, "label": "12 Nov 26", "iso": "2026-11-12", "opening": 206318.97, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 18656.42, "closing": 187662.55}, {"idx": 72, "label": "19 Nov 26", "iso": "2026-11-19", "opening": 187662.55, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 8194.66, "closing": 179467.89}, {"idx": 73, "label": "26 Nov 26", "iso": "2026-11-26", "opening": 179467.89, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 16794.66, "closing": 162673.23}, {"idx": 74, "label": "03 Dec 26", "iso": "2026-12-03", "opening": 162673.23, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 16442.52, "closing": 146230.71}, {"idx": 75, "label": "10 Dec 26", "iso": "2026-12-10", "opening": 146230.71, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 21967.46, "closing": 124263.25}, {"idx": 76, "label": "17 Dec 26", "iso": "2026-12-17", "opening": 124263.25, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 10056.42, "closing": 114206.83}, {"idx": 77, "label": "24 Dec 26", "iso": "2026-12-24", "opening": 114206.83, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 16794.66, "closing": 97412.17}, {"idx": 78, "label": "31 Dec 26", "iso": "2026-12-31", "opening": 97412.17, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 8194.66, "closing": 89217.51}, {"idx": 79, "label": "07 Jan 27", "iso": "2027-01-07", "opening": 89217.51, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 25042.52, "closing": 64174.99}, {"idx": 80, "label": "14 Jan 27", "iso": "2027-01-14", "opening": 64174.99, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 13367.46, "closing": 50807.53}, {"idx": 81, "label": "21 Jan 27", "iso": "2027-01-21", "opening": 50807.53, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 18656.42, "closing": 32151.11}, {"idx": 82, "label": "28 Jan 27", "iso": "2027-01-28", "opening": 32151.11, "sales": 0.0, "other_income": 0.0, "total_in": 0.0, "supplier": 0.0, "total_out": 8194.66, "closing": 23956.45}];
-const MONTHLY=[{"label": "Jul 2025", "in": 107331, "out": 98392, "net": 8939}, {"label": "Aug 2025", "in": 124822, "out": 119182, "net": 5640}, {"label": "Sep 2025", "in": 34150, "out": 94184, "net": -60034}, {"label": "Oct 2025", "in": 107468, "out": 106087, "net": 1380}, {"label": "Nov 2025", "in": 159973, "out": 105249, "net": 54724}, {"label": "Dec 2025", "in": 133578, "out": 122405, "net": 11173}, {"label": "Jan 2026", "in": 99466, "out": 149517, "net": -50051}, {"label": "Feb 2026", "in": 132152, "out": 119606, "net": 12547}, {"label": "Mar 2026", "in": 96243, "out": 110029, "net": -13785}, {"label": "Apr 2026", "in": 192836, "out": 125209, "net": 67627}, {"label": "May 2026", "in": 148615, "out": 140565, "net": 8050}, {"label": "Jun 2026", "in": 211306, "out": 113229, "net": 98077}, {"label": "Jul 2026", "in": 304311, "out": 116490, "net": 187821}, {"label": "Aug 2026", "in": 182010, "out": 123399, "net": 58611}, {"label": "Sep 2026", "in": 0, "out": 60088, "net": -60088}, {"label": "Oct 2026", "in": 0, "out": 82056, "net": -82056}, {"label": "Nov 2026", "in": 0, "out": 57013, "net": -57013}, {"label": "Dec 2026", "in": 0, "out": 73456, "net": -73456}, {"label": "Jan 2027", "in": 0, "out": 65261, "net": -65261}];
-const YTD={"in": 1397572, "out": 1349027, "sales": 1290269};
-const FY={"fy24": 1366847, "fy25": 1778875};
-let CW_IDX=50;
+const WEEKLY=[];
+const MONTHLY=[];
+const YTD={"in": 0, "out": 0, "sales": 0};
+// Sales for the two financial years before the current one, from the sheet.
+const FY={"fy24": 0, "fy25": 0, "year": 0};
+let CW_IDX=0;
 
 const fmt=n=>'$'+Math.abs(Math.round(n)).toLocaleString();
 const fmtK=n=>{const s=n<0?'-':'';return s+'$'+Math.abs(Math.round(n)).toLocaleString()};
@@ -667,6 +674,32 @@ function fyNetByMonth(fyYr){
   return FY_MONTH_ORDER.map(function(mo){
     return byMonth[mo]===undefined?null:byMonth[mo];
   });
+}
+
+/** True once the signed-in user's own spreadsheet has loaded. */
+function hasSheetData(){ return WEEKLY.length > 0; }
+
+/** The blank state every tab shows before a spreadsheet is connected. */
+function emptyNote(msg){
+  return '<div class="card" style="grid-column:1/-1;text-align:center;padding:28px 16px;">' +
+    '<div style="font-size:12px;color:#d0dbd6;opacity:.8;margin-bottom:12px;line-height:1.6;">' + msg + '</div>' +
+    '<button class="cbtn" type="button" onclick="showTab(&quot;connect&quot;,document.getElementById(&quot;nb-connect&quot;))">' +
+    'Connect a spreadsheet</button></div>';
+}
+
+/** Overview with no figures: dashes, no charts, no alerts. */
+function renderOverviewEmpty(){
+  ['ov-open','ov-close','ov-net','ov-in','ov-out','ytd-sales','ytd-in','ytd-out','fy24v','fy25v','fy26v'].forEach(function(id){
+    const el=document.getElementById(id);
+    if(el){ el.textContent='—'; el.style.color='#d0dbd6'; }
+  });
+  document.getElementById('cwl').textContent='—';
+  document.getElementById('alert-box').innerHTML='';
+  const pa=document.getElementById('pipeline-alert'); if(pa) pa.innerHTML='';
+  document.getElementById('risk-badge').style.display='none';
+  destroyChart('fy-chart'); destroyChart('bal-chart');
+  document.getElementById('tight-weeks').innerHTML=
+    emptyNote('No spreadsheet is connected yet. Your cashflow figures appear here once you connect one.');
 }
 
 // Chart.js refuses to bind a canvas that already hosts a chart, so every
@@ -733,6 +766,7 @@ function checkPipeline(){
 }
 
 function renderOverview(){
+  if(!hasSheetData()){ renderOverviewEmpty(); return; }
   const CW=WEEKLY[viewIdx]||{};
   const net=(CW.total_in||0)-(CW.total_out||0);
   const cl=CW.closing||0;
@@ -754,12 +788,17 @@ function renderOverview(){
   document.getElementById('fy24v').textContent=fmt(FY.fy24);
   document.getElementById('fy25v').textContent=fmt(FY.fy25);
   document.getElementById('fy26v').textContent=fmt(YTD.sales)+' YTD';
+  if(FY.year){
+    document.getElementById('fy24l').textContent='FY'+String(FY.year-2).slice(2);
+    document.getElementById('fy25l').textContent='FY'+String(FY.year-1).slice(2);
+    document.getElementById('fy26l').textContent='FY'+String(FY.year).slice(2)+' YTD';
+  }
 
   const ab=document.getElementById('alert-box');
   const todayDate=new Date();
   const isEndOfFY=todayDate.getMonth()===5;
   const daysToFYEnd=Math.ceil((new Date(todayDate.getFullYear(),5,30)-todayDate)/(1000*60*60*24));
-  const fyWarning=isEndOfFY?'<div class="warn" style="margin-bottom:8px;">📅 End of Financial Year — '+daysToFYEnd+' days remaining in FY2026 (ends 30 June 2026). Ensure all invoices, reconciliations and BAS are up to date.</div>':'';
+  const fyWarning=isEndOfFY?'<div class="warn" style="margin-bottom:8px;">📅 End of Financial Year — '+daysToFYEnd+' days remaining in FY'+todayDate.getFullYear()+' (ends 30 June '+todayDate.getFullYear()+'). Ensure all invoices, reconciliations and BAS are up to date.</div>':'';
   if(cl<0)ab.innerHTML=fyWarning+'<div class="alert">⚠ Closing balance is negative this week ('+fmt(cl)+'). Review payments and receipts immediately.</div>';
   else if(cl<5000)ab.innerHTML=fyWarning+'<div class="warn">⚡ Cash is tight this week. Closing balance '+fmt(cl)+'. Monitor closely.</div>';
   else ab.innerHTML=fyWarning;
@@ -782,7 +821,7 @@ function renderOverview(){
     }
   }
 
-  makeChart('fy-chart',{type:'bar',data:{labels:['FY2024\n(Jul 23–Jun 24)','FY2025\n(Jul 24–Jun 25)','FY2026 YTD\n(Jul 25–Jun 26)'],datasets:[{data:[FY.fy24,FY.fy25,YTD.sales],backgroundColor:['rgba(71,85,105,.6)','rgba(49,81,80,.8)','rgba(204,244,146,.8)'],borderColor:['#475569','#315150','#ccf492'],borderWidth:1,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>fmtK(ctx.raw)}}},scales:{x:{grid:{color:'rgba(49,81,80,.2)'},ticks:{color:'#d0dbd6',font:{size:10}}},y:{grid:{color:'rgba(49,81,80,.2)'},ticks:{color:'#d0dbd6',font:{size:9},callback:v=>fmtK(v)}}}}});
+  makeChart('fy-chart',{type:'bar',data:{labels:['FY'+(FY.year-2),'FY'+(FY.year-1),'FY'+FY.year+' YTD'],datasets:[{data:[FY.fy24,FY.fy25,YTD.sales],backgroundColor:['rgba(71,85,105,.6)','rgba(49,81,80,.8)','rgba(204,244,146,.8)'],borderColor:['#475569','#315150','#ccf492'],borderWidth:1,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>fmtK(ctx.raw)}}},scales:{x:{grid:{color:'rgba(49,81,80,.2)'},ticks:{color:'#d0dbd6',font:{size:10}}},y:{grid:{color:'rgba(49,81,80,.2)'},ticks:{color:'#d0dbd6',font:{size:9},callback:v=>fmtK(v)}}}}});
 
   const n12=WEEKLY.slice(viewIdx,viewIdx+12);
   makeChart('bal-chart',{type:'line',data:{labels:n12.map(w=>w.label.slice(0,6)),datasets:[{label:'Closing',data:n12.map(w=>w.closing),borderColor:'#ccf492',backgroundColor:'rgba(204,244,146,.08)',fill:true,tension:0.3,pointBackgroundColor:n12.map(w=>w.closing<0?'#ef4444':w.closing<5000?'#f59e0b':'#ccf492'),pointRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>fmt(ctx.raw)}}},scales:{x:{grid:{color:'rgba(49,81,80,.2)'},ticks:{color:'#d0dbd6',font:{size:9}}},y:{grid:{color:'rgba(49,81,80,.2)'},ticks:{color:'#d0dbd6',font:{size:9},callback:v=>fmtK(v)}}}}});
@@ -817,6 +856,10 @@ function stepWeek(dir){
 }
 
 function renderWeekly(){
+  if(!hasSheetData()){
+    document.getElementById('weekly-list').innerHTML=emptyNote('No spreadsheet is connected yet. Your weekly cashflow appears here once you connect one.');
+    return;
+  }
   var pl=checkPipeline();
   var plLabels=pl.triggeredLabels||{};
   var weeks=WEEKLY;
@@ -902,6 +945,12 @@ function renderWeekly(){
 function toggleW(idx){expW=expW===idx?null:idx;renderWeekly();}
 
 function renderMonthly(){
+  if(!hasSheetData()){
+    const pa=document.getElementById('fy-pipeline-alert'); if(pa) pa.innerHTML='';
+    if(moChart){ try{ moChart.destroy(); }catch(_){} moChart=null; }
+    document.getElementById('monthly-list').innerHTML=emptyNote('No spreadsheet is connected yet. Your financial-year performance appears here once you connect one.');
+    return;
+  }
 
   // Pipeline alert on FY Performance tab
   var pipeline = checkPipeline();
@@ -1152,17 +1201,9 @@ function renderClients(){
 
   var live = (typeof CLIENTS_LIVE !== 'undefined') ? CLIENTS_LIVE : null;
 
-  // Nothing connected yet: show the built-in sample list under a single
-  // heading rather than inventing financial years the sheet has not supplied.
+  // Nothing connected yet: blank, never a built-in list.
   if (!live || !live.byFY) {
-    el.innerHTML = '<div class="fysec is-current">' +
-      '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:6px;margin-bottom:10px;border-bottom:1px solid var(--accent-dim);">' +
-      '<span style="font-size:10px;font-weight:700;color:var(--accent);letter-spacing:2px;text-transform:uppercase;">Sample data &mdash; connect a sheet to see every financial year</span></div>' +
-      clientGrid(CLIENTS.map(function (c) {
-        return { name: c.name, total: c.total, invoices: c.invoices,
-                 lastPayment: null, lastPaymentText: c.last_payment, ahead: c.contracted_ahead };
-      }), CLIENTS.reduce(function (m, c) { m[c.name] = c.lifetime; return m; }, {})) +
-      '</div>';
+    el.innerHTML = emptyNote('No spreadsheet is connected yet. Client receipts appear here once you connect one.');
     return;
   }
 
@@ -1394,10 +1435,10 @@ function stamp2(iso) {
    -------------------------------------------------------------------------- */
 
 const ACCOUNT_FALLBACK = {
-  working:    { label: 'Working Account',     opening: 19655, closing: 51234 },
-  regulation: { label: 'Regulation Account',  opening: 15658, closing: 7059 },
-  savings:    { label: 'Savings Account',     opening: 49000, closing: 50000, projected12m: 102000 },
-  profit:     { label: 'Profit Reinvestment', opening: 0,     closing: 0,     projected12m: 0 }
+  working:    { label: 'Working Account',     opening: 0, closing: 0 },
+  regulation: { label: 'Regulation Account',  opening: 0, closing: 0 },
+  savings:    { label: 'Savings Account',     opening: 0, closing: 0, projected12m: 0 },
+  profit:     { label: 'Profit Reinvestment', opening: 0, closing: 0, projected12m: 0 }
 };
 
 // Descriptive chrome — not derived from the sheet.
@@ -1450,6 +1491,16 @@ function accountWeek(a, iso) {
 function renderAccounts() {
   const grid = document.getElementById('accounts-grid');
   if (!grid) return;
+
+  const obligations = document.getElementById('accounts-obligations');
+  if (!hasSheetData()) {
+    grid.innerHTML = emptyNote('No spreadsheet is connected yet. Your account balances appear here once you connect one.');
+    const w = document.getElementById('accounts-week'); if (w) w.innerHTML = '';
+    const t = document.getElementById('accounts-total'); if (t) t.innerHTML = '';
+    if (obligations) obligations.hidden = true;
+    return;
+  }
+  if (obligations) obligations.hidden = false;
 
   // Follow the Overview week navigator, not the current week, so both tabs
   // always describe the same week.
@@ -1627,6 +1678,17 @@ function rebuildDerived() {
   }
 
   YTD.sales = Math.round(totals.sales);
+
+  // The overview's FY comparison: sales for the two years before this one,
+  // read from the sheet (these were hardcoded before).
+  const salesFor = function (fy) {
+    let t = 0;
+    WEEKLY.forEach(function (w) { if (fyEndYear(w.iso) === fy) t += (w.sales || 0); });
+    return Math.round(t);
+  };
+  FY.year = totals.fy;
+  FY.fy24 = salesFor(totals.fy - 2);
+  FY.fy25 = salesFor(totals.fy - 1);
   YTD.in    = Math.round(totals.in);
   YTD.out   = Math.round(totals.out);
 
@@ -1735,8 +1797,7 @@ function applySnapshot(snap, origin) {
     const n = sync.parseWarnings.length;
     setBanner('warn', '⚡ The spreadsheet was read, but ' + n + ' figure' + (n === 1 ? '' : 's') +
       ' could not be matched to a row by name. ' +
-      (sync.isAdmin ? 'Open the <strong>Connect</strong> tab to see which rows were used.'
-                    : 'Please let Greg know.') +
+      'Open the <strong>Connect</strong> tab to see which rows were used.' +
       '<br><span style="opacity:.8;font-size:10px;">· ' +
       sync.parseWarnings.slice(0, 3).join('<br>· ') +
       (n > 3 ? '<br>· …and ' + (n - 3) + ' more' : '') + '</span>');
@@ -2446,16 +2507,23 @@ function sourceSummary(source) {
 }
 
 function storeSource(source) {
-  try { localStorage.setItem(SOURCE_STORAGE_KEY, JSON.stringify(source)); }
+  // Tagged with the account that connected it, so it is never handed to a
+  // different person signing in on the same browser.
+  const tagged = Object.assign({}, source, { owner: String(sync.email || '').toLowerCase() || null });
+  try { localStorage.setItem(SOURCE_STORAGE_KEY, JSON.stringify(tagged)); }
   catch (_) { /* private browsing — the sheet just won't be remembered */ }
 }
 
-function loadStoredSource() {
+function loadStoredSource(email) {
   try {
     const raw = localStorage.getItem(SOURCE_STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    return (parsed && parsed.kind) ? parsed : null;
+    if (!parsed || !parsed.kind) return null;
+    // Only the account that connected it. An untagged entry (saved before
+    // tagging existed) has no known owner, so it is not reused.
+    if (!email || parsed.owner !== String(email).toLowerCase()) return null;
+    return parsed;
   } catch (_) { return null; }
 }
 
@@ -2684,7 +2752,7 @@ async function refreshFromSource(isInitial) {
     const result = await fetchSnapshot(dueForSecondary);
     if (!result) {
       setStatus('cached', 'Cached data');
-      setBanner('warn', '⚡ No live data source is linked to this account yet, so the figures below are the built-in sample data.');
+      setBanner('warn', '⚡ No spreadsheet is connected yet. Open the <strong>Connect</strong> tab to link your Google Sheet.');
       return;
     }
     applySnapshot(result.snapshot, result.via);
@@ -2886,7 +2954,6 @@ function renderConnect() {
 
 /** Validate, adopt and start syncing whatever was pasted. */
 async function connectSheet() {
-  if (!sync.isAdmin) return;   // Connect is Greg's (admins) only
   const input = document.getElementById('connect-url');
   const btn = document.getElementById('connect-btn');
   const parsed = parseSheetSource(input.value);
@@ -2932,7 +2999,6 @@ async function connectSheet() {
 }
 
 function disconnectSheet() {
-  if (!sync.isAdmin) return;   // Connect is Greg's (admins) only
   stopRealtime();
   stopPolling();
   sync.source = null;
@@ -2944,10 +3010,11 @@ function disconnectSheet() {
   sync.parseWarnings = null;
   sync.lastSecondaryAt = 0;
   ACCOUNTS_LIVE_KEYS = {};
+  clearSheetData();
   clearStoredSource();
   persistSourceToAccount(null);
   setStatus('cached', 'Not connected');
-  setBanner('warn', '⚡ No spreadsheet is connected, so the figures below are sample data. Use the Connect tab to link your sheet.');
+  setBanner('warn', '⚡ No spreadsheet is connected. Open the <strong>Connect</strong> tab to link your sheet.');
   showConnectResult('busy', 'Disconnected. Paste a link above to connect a different sheet.');
   renderConnect();
 }
@@ -2958,13 +3025,30 @@ function disconnectSheet() {
  * supabase/schema.sql; failure here is not fatal because localStorage already
  * holds the connection.
  */
+/** Forget every figure loaded from a sheet and show the blank state. */
+function clearSheetData() {
+  WEEKLY.length = 0;
+  MONTHLY.length = 0;
+  YTD.in = 0; YTD.out = 0; YTD.sales = 0;
+  FY.fy24 = 0; FY.fy25 = 0; FY.year = 0;
+  CW_IDX = 0; viewIdx = 0;
+  CLIENTS_LIVE = null;
+  ACCOUNTS_LIVE = JSON.parse(JSON.stringify(ACCOUNT_FALLBACK));
+  ACCOUNTS_LIVE_KEYS = {};
+  sync.rowMap = null;
+  sync.parseWarnings = null;
+  sync.tabStatus = null;
+  sync.otherTabs = null;
+  renderAll();
+}
+
 async function persistSourceToAccount(source) {
   if (!sb || !sync.email) return;
   try {
     await sb.from('clients').update({
       sheet_id: source && source.kind === 'sheet' ? source.id : null,
       script_url: source && source.kind !== 'sheet' ? source.url : null
-    }).eq('email', sync.email);
+    }).eq('email', String(sync.email).toLowerCase());
   } catch (err) {
     console.warn('[connect] could not save the connection to your account', err);
   }
@@ -3033,7 +3117,7 @@ async function launchDashboard(email) {
   } catch (err) {
     console.error('[sync] client lookup failed', err);
     setStatus('error', 'Account not verified');
-    setBanner('error', '⚠ We could not verify which spreadsheet belongs to this account, so live data is switched off. The figures below are sample data. Contact your administrator.');
+    setBanner('error', '⚠ We could not verify which spreadsheet belongs to this account, so no figures are shown. Contact your administrator.');
     return;
   }
 
@@ -3045,16 +3129,15 @@ async function launchDashboard(email) {
   } else if (record && record.sheet_id) {
     source = { kind: 'sheet', id: record.sheet_id, gid: null, label: 'Google Sheet' };
   }
-  // A sheet remembered in this browser only applies to an admin. On a shared
-  // computer it may be Greg's, and must not open for someone else.
-  if ((!source || source.error) && sync.isAdmin) source = loadStoredSource();
+  // A sheet connected earlier in this browser — but only if it was connected
+  // by this same account. On a shared computer the remembered sheet may be
+  // somebody else's, and must not open for the next person who signs in.
+  if (!source || source.error) source = loadStoredSource(sync.email);
   if (source && source.error) source = null;
 
   if (!source) {
     setStatus('cached', 'Not connected');
-    setBanner('warn', sync.isAdmin
-      ? '⚡ No spreadsheet is connected yet, so the figures below are sample data. Open the <strong>Connect</strong> tab to link your Google Sheet.'
-      : '⚡ No cashflow sheet is linked to your account yet, so the figures below are sample data. Please contact Greg to have your sheet linked.');
+    setBanner('warn', '⚡ No spreadsheet is connected yet. Open the <strong>Connect</strong> tab to link your Google Sheet.');
     renderConnect();
     return;
   }
@@ -3092,16 +3175,12 @@ function esc(v) {
 
 function setAdmin(on) {
   sync.isAdmin = !!on;
-  ['nb-users', 'nb-connect'].forEach(function (id) {
-    const nb = document.getElementById(id);
-    if (nb) nb.hidden = !on;
-  });
-  // A non-admin must never be left looking at an admin panel — e.g. after
-  // Greg signs out and someone else signs in on the same browser.
-  if (!on && ['tab-users', 'tab-connect'].some(function (id) {
-    const t = document.getElementById(id);
-    return t && t.classList.contains('active');
-  })) {
+  const nb = document.getElementById('nb-users');
+  if (nb) nb.hidden = !on;
+  // A non-admin must never be left looking at the Import Users panel — e.g.
+  // after Greg signs out and someone else signs in on the same browser.
+  const tab = document.getElementById('tab-users');
+  if (!on && tab && tab.classList.contains('active')) {
     showTab('overview', document.querySelectorAll('.nb')[0]);
   }
 }
@@ -3449,7 +3528,12 @@ async function handleLogout() {
   sync.lastUpdated = null;
   setAdmin(false);
 
-  await sb.auth.signOut();
+  try { await sb.auth.signOut(); } catch (_) { /* reload below still clears everything */ }
+
+  // Reload the page. Every figure, client and balance this user loaded lives
+  // in the page's memory; clearing it field by field risks missing one, and
+  // the next person to sign in on this browser must see none of it.
+  wipeOnSignOut();
 
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('dashboard-wrap').style.display = 'none';
@@ -3460,11 +3544,20 @@ async function handleLogout() {
   setBanner(null, null);
 }
 
+let wiping = false;
+function wipeOnSignOut() {
+  if (wiping) return;
+  wiping = true;
+  window.location.reload();
+}
+
 // Keep tabs in step when a session is refreshed or ended elsewhere.
 if (sb) sb.auth.onAuthStateChange(function (event, session) {
   if (event === 'SIGNED_OUT') {
     stopRealtime();
     stopPolling();
+    // Signed out in another tab: this tab must not keep showing the figures.
+    if (sync.email) wipeOnSignOut();
   } else if (event === 'SIGNED_IN' && session && session.user && !sync.sheetId) {
     launchDashboard(session.user.email);
   }

@@ -75,28 +75,34 @@ async function session(clientRow, storedSource) {
   // ---- a normal user never sees the tab ------------------------------------
   let s = await session({ sheet_id: SHEET, is_admin: false });
   check('non-admin: Import Users tab hidden', await s.page.evaluate(() => document.getElementById('nb-users').hidden));
-  check('non-admin: Connect tab hidden', await s.page.evaluate(() => document.getElementById('nb-connect').hidden));
+  check('non-admin: Connect tab VISIBLE (Connect is for everyone)',
+    !(await s.page.evaluate(() => document.getElementById('nb-connect').hidden)));
   check('non-admin: no admin calls made', s.calls.length === 0, JSON.stringify(s.calls));
   check('non-admin: dashboard loads with their linked sheet',
     await s.page.isVisible('#dashboard-wrap') && (await s.page.evaluate(() => sync.sheetId)) === SHEET);
-  check('non-admin: sees the same five dashboard tabs as Greg',
+  check('non-admin: sees every tab except Import Users',
     (await s.page.evaluate(() => Array.from(document.querySelectorAll('.nb')).filter(b => !b.hidden)
-      .map(b => b.textContent.trim()).join('|'))) === 'Overview|Weekly|FY Performance|Clients|4 Accounts');
-  check('non-admin: connectSheet() refuses to run', await s.page.evaluate(async () => {
-    document.getElementById('connect-url').value = 'https://docs.google.com/spreadsheets/d/1AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/edit';
-    await connectSheet();
-    return sync.sheetId === '1MXTCOStUpHpGYrthqRb8NCuERbUIeyZcRZVvdG4P15c';
-  }));
+      .map(b => b.textContent.trim()).join('|'))) === 'Overview|Weekly|FY Performance|Clients|4 Accounts|Connect');
+  await s.page.click('#nb-connect');
+  await s.page.waitForTimeout(250);
+  check('non-admin: Connect tab opens with the link box', await s.page.isVisible('#connect-url'));
   await s.browser.close();
 
-  // ---- a sheet remembered in this browser is not handed to a non-admin ----
+  // ---- a sheet remembered in this browser belongs to whoever connected it --
   // e.g. Greg connected a sheet on a shared computer, then someone else signs in.
   s = await session({ sheet_id: null, is_admin: false }, {
-    kind: 'sheet', id: SHEET, gid: null, label: 'Google Sheet'
+    kind: 'sheet', id: SHEET, gid: null, label: 'Google Sheet', owner: 'someone-else@x.com'
   });
-  check('non-admin with no sheet does NOT inherit a sheet stored in the browser',
+  check('a sheet remembered for ANOTHER account is not handed to this one',
     (await s.page.evaluate(() => sync.sheetId)) === null && (await s.page.evaluate(() => sync.source)) === null);
-  check('  ...and is told to contact Greg', /contact Greg/i.test(await s.page.textContent('#sync-banner')));
+  check('  ...and they are pointed at the Connect tab', /Connect/.test(await s.page.textContent('#sync-banner')));
+  await s.browser.close();
+
+  s = await session({ sheet_id: null, is_admin: false }, {
+    kind: 'sheet', id: SHEET, gid: null, label: 'Google Sheet', owner: 'admin@x.com'
+  });
+  check('a sheet this same account connected earlier IS restored',
+    (await s.page.evaluate(() => sync.sheetId)) === SHEET);
   await s.browser.close();
 
   // ---- an older database (no is_admin column) still signs people in ------
@@ -230,10 +236,13 @@ async function session(clientRow, storedSource) {
   check('remove asks the server to revoke that email', rm && rm.body.email === 'nickbruce00@gmail.com');
 
   // ---- sign out hides it again --------------------------------------------
-  await page.evaluate(() => handleLogout());
-  await page.waitForTimeout(300);
+  // Sign-out reloads the page to wipe everything, so don't await inside it.
+  await page.evaluate(() => { handleLogout(); });
+  await page.waitForTimeout(800);
+  await page.waitForLoadState('networkidle');
   check('sign-out hides the Users tab', await page.evaluate(() => document.getElementById('nb-users').hidden));
-  check('sign-out hides the Connect tab', await page.evaluate(() => document.getElementById('nb-connect').hidden));
+  check('Connect stays available after sign-out (it is not an admin tab)',
+    !(await page.evaluate(() => document.getElementById('nb-connect').hidden)));
   check('sign-out leaves the Users panel', await page.evaluate(() => !document.getElementById('tab-users').classList.contains('active')));
 
   check('no page errors', s.errs.length === 0, s.errs.join(' | '));

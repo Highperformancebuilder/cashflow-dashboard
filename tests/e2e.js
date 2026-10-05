@@ -181,8 +181,10 @@ const STUB = require('fs').readFileSync(__dirname + '/stub.js', 'utf8');
     banner: document.getElementById('sync-banner').textContent.trim().slice(0, 60)
   }));
   console.log('  [state before logout]', JSON.stringify(preLogout));
-  await ev(() => handleLogout());
-  await page.waitForTimeout(400);
+  // Sign-out reloads the page to wipe everything, so don't await inside it.
+  await page.evaluate(() => { handleLogout(); });
+  await page.waitForTimeout(800);
+  await page.waitForLoadState('networkidle');
   check('logout returns to login screen', await page.isVisible('#login-screen'));
   check('logout stops polling', await ev(() => sync.pollTimer === null));
   check('logout removes realtime channel', await ev(() => sync.channel === null));

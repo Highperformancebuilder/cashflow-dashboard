@@ -179,6 +179,9 @@ const STUB = require('fs').readFileSync(__dirname + '/stub.js', 'utf8');
   await probe('#tab-accounts .oblig', 'Finance obligation row');
 
   // ---- border weight: 1px at rest, 3px on hover, no content shift --------
+  // Pause the 5-second refresh: it re-renders the cards, and a card replaced
+  // between two measurements reads as NaN — a race in the test, not the page.
+  await page.evaluate(() => { stopPolling(); stopRealtime(); });
   const borderProbe = async (tabIdx, selector, label) => {
     await page.evaluate(i => document.querySelectorAll('.nb')[i].click(), tabIdx);
     await page.waitForTimeout(350);

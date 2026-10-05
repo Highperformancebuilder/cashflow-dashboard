@@ -20,17 +20,15 @@ const STUB = require('fs').readFileSync(__dirname + '/stub.js', 'utf8');
   const T = [];
   const check = (n, c, d = '') => T.push({ n, ok: !!c, d });
 
-  // ---- before sign-in: sample data, no invented financial years -----------
+  // ---- before a sheet is connected: blank, never a built-in client list ---
   await page.evaluate(() => renderClients());
   await page.waitForTimeout(200);
-  const sample = await page.evaluate(() => ({
+  const blank = await page.evaluate(() => ({
     html: document.getElementById('client-list').textContent.replace(/\s+/g, ' '),
-    sections: document.querySelectorAll('#client-list .fysec').length,
     cards: document.querySelectorAll('#client-list .gcard').length
   }));
-  check('sample data renders before a sheet is connected', sample.cards > 0, 'cards=' + sample.cards);
-  check('sample state is labelled as sample, not a financial year',
-    /sample data/i.test(sample.html) && sample.sections === 1, sample.html.slice(0, 90));
+  check('no client cards before a sheet is connected', blank.cards === 0, 'cards=' + blank.cards);
+  check('blank state invites the user to connect', /connect/i.test(blank.html), blank.html.slice(0, 90));
 
   // ---- sign in: the fixture serves the real sheet shape --------------------
   await page.fill('#login-email', 'greg@example.com');

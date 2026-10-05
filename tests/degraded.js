@@ -46,8 +46,8 @@ async function scenario(name, pre, body) {
     const msg = await page.textContent('#login-error');
     check('C: message explains the failure', /unavailable|authentication/i.test(msg), msg.slice(0, 70));
     check('C: sign-in button disabled', await ev(() => document.getElementById('login-btn').disabled));
-    check('C: accounts still rendered from fallback',
-      (await ev(() => document.getElementById('accounts-grid').children.length)) === 4);
+    check('C: no figures shown (blank, no figures from anyone)',
+      (await ev(() => document.getElementById('accounts-grid').querySelectorAll('.acard').length)) === 0);
     const fatal = errs.filter(e => /is not defined/.test(e));
     check('C: no fatal "supabase is not defined"', fatal.length === 0, fatal.join('|'));
   });
@@ -73,12 +73,12 @@ async function scenario(name, pre, body) {
     await page.click('#login-btn');
     await page.waitForTimeout(1200);
     const banner = await page.textContent('#sync-banner');
-    // A non-admin has no Connect tab, so the banner sends them to Greg instead.
-    check('E: explains that no sheet is linked', /no cashflow sheet is linked/i.test(banner), banner.trim().slice(0, 70));
-    check('E: points the user at Greg, not a tab they cannot see',
-      /contact Greg/i.test(banner) && !/Connect/.test(banner), banner.trim().slice(0, 90));
+    check('E: explains that no sheet is connected', /no spreadsheet is connected/i.test(banner), banner.trim().slice(0, 70));
+    check('E: points the user at the Connect tab', /connect/i.test(banner), banner.trim().slice(0, 70));
     check('E: does not adopt a default sheet', (await ev(() => sync.sheetId)) === null);
-    check('E: dashboard still usable with sample data', await page.isVisible('#dashboard-wrap'));
+    check('E: dashboard opens, but blank — no figures until a sheet is connected',
+      await page.isVisible('#dashboard-wrap') && (await ev(() => WEEKLY.length)) === 0 &&
+      (await page.textContent('#ov-close')).trim() === '—');
   });
 
   T.forEach(t => console.log((t.p ? '  PASS  ' : '  FAIL  ') + t.n + (t.d ? '   [' + t.d + ']' : '')));

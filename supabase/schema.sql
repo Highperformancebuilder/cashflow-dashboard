@@ -100,15 +100,16 @@ $$;
 revoke all on function public.is_dashboard_admin() from public;
 grant execute on function public.is_dashboard_admin() to authenticated;
 
--- Only admins (Greg) have the Connect tab, so only admins may do this. A
--- regular user re-pointing their own row at another sheet_id would gain read
--- access to that sheet's snapshot through the policy further down.
+-- Every signed-in user has the Connect tab, so every user may re-point their
+-- OWN row at a sheet. (Doing so also lets them read that sheet's snapshot
+-- through the policy further down — accepted: Connect is open to all users.)
+-- The column grants below still stop anyone touching any other column.
 drop policy if exists "clients: update own row" on public.clients;
 create policy "clients: update own row"
   on public.clients
   for update
   to authenticated
-  using      ( lower(email) = lower(auth.jwt() ->> 'email') and public.is_dashboard_admin() )
+  using      ( lower(email) = lower(auth.jwt() ->> 'email') )
   with check ( lower(email) = lower(auth.jwt() ->> 'email') );
 
 -- The policy above limits WHICH row a user may update, not WHICH columns. On
