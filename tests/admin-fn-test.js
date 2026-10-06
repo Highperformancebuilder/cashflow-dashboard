@@ -231,11 +231,19 @@ const call = (token, body, method = 'POST') => fn.handler({
   t('a failed invite is reported and grants no access',
     r.body.results[1].status === 'error' && !s.clients['bounce@x.com'], JSON.stringify(r.body.results[1]));
 
-  // ---- no sheet link → the importing admin's (Greg's) own sheet -------------
+  // ---- no sheet link → NO sheet. Never the admin's. --------------------------
+  const OWN_SHEET = '1' + 'B'.repeat(43);
   s = makeFake(); s.clients['admin@x.com'].sheet_id = SHEET; fn._setFetch(s.fetch);
-  await call('admin-token', { action: 'import', mode: 'file', users: [{ email: 'team@x.com', password: 'Stockley' }] });
-  t('a user with no sheet link gets the admin’s own sheet', s.clients['team@x.com'].sheet_id === SHEET,
-    s.clients['team@x.com'] && s.clients['team@x.com'].sheet_id);
+  r = await call('admin-token', { action: 'import', mode: 'file', users: [
+    { email: 'team@x.com', password: 'Stockley' },
+    { email: 'own@x.com', password: 'Stockley', sheet: 'https://docs.google.com/spreadsheets/d/' + OWN_SHEET + '/edit' }
+  ] });
+  t('a user imported with no sheet link gets NO sheet (not the admin sheet)',
+    s.clients['team@x.com'] && !s.clients['team@x.com'].sheet_id, JSON.stringify(s.clients['team@x.com']));
+  t('  ...and the result reports no sheet', r.body.results[0].sheet === null);
+  t('a user whose row HAS a sheet link still gets that sheet',
+    s.clients['own@x.com'].sheet_id === OWN_SHEET);
+  t('the admin own sheet is untouched', s.clients['admin@x.com'].sheet_id === SHEET);
 
   // ---- default sheet --------------------------------------------------------
   process.env.DEFAULT_SHEET_ID = SHEET;

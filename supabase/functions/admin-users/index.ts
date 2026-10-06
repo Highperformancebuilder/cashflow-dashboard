@@ -19,8 +19,9 @@
  *
  * Optional function secrets (Edge Functions → Secrets):
  *   SITE_URL          where invite emails send people back to
- *   DEFAULT_SHEET_ID  sheet for imported users with no sheet link
- *                     (otherwise they get the importing admin's own sheet)
+ *   DEFAULT_SHEET_ID  optional: a sheet to give imported users who have no sheet
+ *                     link. Leave it UNSET (the default): people then start
+ *                     with no sheet and connect their own.
  *
  * Deploy with "Verify JWT with legacy secret" OFF: the function verifies the
  * caller itself, and the gateway check rejects tokens from the new JWT signing
@@ -367,9 +368,9 @@ export async function handle(req: Request, envIn: Partial<Env>, f?: Fetch): Prom
   try { admin = await adminRow(env, fetcher, caller); } catch (_) { admin = null; }
   if (!admin) return reply(403, { error: 'Only dashboard admins can manage users.' });
 
-  // People imported without a Sheet link see the importing admin's own sheet —
-  // Greg's file has no sheet column, and everyone he adds sees his dashboard.
-  if (!env.defaultSheet && admin.sheet_id) env.defaultSheet = admin.sheet_id;
+  // Someone imported without a Sheet link gets NO sheet: their dashboard is
+  // blank until they connect their own. (This used to hand them the importing
+  // admin's sheet, which showed Greg's figures to every new user.)
 
   let body: Json;
   try { body = await req.json(); }

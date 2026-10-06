@@ -194,8 +194,8 @@ it the secret key automatically, so the key is never copied anywhere.
    they are an admin; the gateway check would reject valid sign-ins.
 
 Optional function secrets (**Edge Functions → Secrets**): `SITE_URL` (where
-invite emails send people back to) and `DEFAULT_SHEET_ID` (otherwise people
-imported without a sheet link get the importing admin's own sheet).
+invite emails send people back to) and `DEFAULT_SHEET_ID` (leave it unset:
+people imported without a sheet link start with no sheet and connect their own).
 
 With the CLI instead: `supabase functions deploy admin-users` —
 `supabase/config.toml` already turns JWT verification off.
