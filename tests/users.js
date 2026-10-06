@@ -125,10 +125,10 @@ async function session(clientRow, storedSource) {
   await page.waitForTimeout(400);
   check('opening the tab lists users', calls.some(c => c.body.action === 'list'));
   check('admin calls carry the signed-in token', calls.every(c => c.auth === 'Bearer admin-token'), calls[0] && calls[0].auth);
-  check('calls go to the Supabase Edge Function on the new project',
-    calls.length && calls.every(c => c.url === 'https://kgjsqsdpwehcebyhkhql.supabase.co/functions/v1/admin-users'), calls[0] && calls[0].url);
+  check('calls go to the Supabase Edge Function on the active project',
+    calls.length && calls.every(c => c.url === 'https://abhmonhsiluraykelrpp.supabase.co/functions/v1/admin-users'), calls[0] && calls[0].url);
   check('calls carry the publishable key the Supabase gateway expects',
-    calls.every(c => c.apikey === 'sb_publishable_gZJ0N7T73joHRj2H8V-ArA_5bNgnB3D'));
+    calls.every(c => c.apikey === 'sb_publishable_D5P8QA2r-4FWmm3TfPpZgA_y1NSlV1W'));
   check('user list renders', (await page.evaluate(() => document.querySelectorAll('#users-list tr').length)) === 4);
   check('the admin cannot remove themselves (no button on own row)',
     await page.evaluate(() => !Array.from(document.querySelectorAll('#users-list button')).some(b => b.dataset.email === 'admin@x.com')));
